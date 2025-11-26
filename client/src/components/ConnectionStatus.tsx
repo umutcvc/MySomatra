@@ -8,13 +8,15 @@ interface ConnectionStatusProps {
   batteryLevel: number;
   signalStrength: number;
   lastSync: string;
+  className?: string;
 }
 
 export default function ConnectionStatus({
   deviceName,
   batteryLevel,
   signalStrength,
-  lastSync
+  lastSync,
+  className
 }: ConnectionStatusProps) {
   const getSignalBars = (strength: number) => {
     if (strength >= 80) return 4;
@@ -24,7 +26,7 @@ export default function ConnectionStatus({
   };
 
   return (
-    <Card data-testid="card-connection-status">
+    <Card className={className} data-testid="card-connection-status">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Device Status</CardTitle>

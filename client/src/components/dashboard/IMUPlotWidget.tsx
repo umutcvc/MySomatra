@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Activity, RotateCcw, Crosshair } from "lucide-react";
 import { useBluetooth } from "@/hooks/use-bluetooth";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 
 interface IMUPlotWidgetProps {
   className?: string;
@@ -13,6 +13,8 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -178,7 +180,28 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   }, [draw]);
 
   const handleCalibrate = async () => {
+    setIsCalibrating(true);
+    setCountdown(3);
+    
+    // Start countdown
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    // Send calibration command
     await calibrateIMU(3000);
+    
+    // Clean up after calibration
+    setTimeout(() => {
+      setIsCalibrating(false);
+      setCountdown(0);
+    }, 3000);
   };
 
   const currentPitch = pitchData?.pitch ?? 0;
@@ -230,11 +253,12 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
             variant="outline" 
             size="sm"
             onClick={handleCalibrate}
-            disabled={!isConnected}
+            disabled={!isConnected || isCalibrating}
             data-testid="button-calibrate-imu"
+            className={isCalibrating ? 'animate-pulse' : ''}
           >
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Calibrate Zero
+            <RotateCcw className={`w-4 h-4 mr-1 ${isCalibrating ? 'animate-spin' : ''}`} />
+            {isCalibrating ? `Calibrating... ${countdown}s` : 'Calibrate Zero'}
           </Button>
         </div>
 

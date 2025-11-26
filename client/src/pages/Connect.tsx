@@ -102,33 +102,34 @@ export default function Connect() {
         {isConnected && device ? (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 h-[420px]">
                 <ConnectionStatus
                   deviceName={device.name}
                   batteryLevel={batteryLevel || 0}
                   signalStrength={85}
                   lastSync="Just now"
+                  className="h-full"
                 />
               </div>
 
-              <div className="lg:col-span-1">
-                <TherapyWidget />
+              <div className="lg:col-span-1 h-[420px]">
+                <TherapyWidget className="h-full" />
               </div>
 
-              <div className="lg:col-span-2">
-                <IMUPlotWidget />
+              <div className="lg:col-span-2 h-[420px]">
+                <IMUPlotWidget className="h-full" />
               </div>
             </div>
 
             <div className="grid lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <ActivityWidget />
+              <div className="lg:col-span-1 h-[400px]">
+                <ActivityWidget className="h-full" />
               </div>
-              <div className="lg:col-span-1">
-                <CalendarWidget />
+              <div className="lg:col-span-1 h-[400px]">
+                <CalendarWidget className="h-full" />
               </div>
-              <div className="lg:col-span-1">
-                <TasksWidget />
+              <div className="lg:col-span-1 h-[400px]">
+                <TasksWidget className="h-full" />
               </div>
             </div>
 

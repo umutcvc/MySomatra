@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckSquare, Plus, Square, Trash2 } from "lucide-react";
+import { Check, Plus, Circle, X, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -60,24 +60,25 @@ export default function TasksWidget({ className }: TasksWidgetProps) {
   const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
 
   return (
-    <Card className={className} data-testid="widget-tasks">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base font-medium">Daily Tasks</CardTitle>
-        <div className="text-sm text-muted-foreground">
-          {completedCount}/{tasks.length}
+    <Card className={`${className} flex flex-col`} data-testid="widget-tasks">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base font-medium">Daily Tasks</CardTitle>
         </div>
+        <ListTodo className="w-5 h-5 text-primary" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         <div className="mb-4">
-          <div className="h-2 rounded-full bg-muted overflow-hidden mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-muted-foreground">Progress</span>
+            <span className="text-xs font-medium text-primary">{completedCount}/{tasks.length}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div 
-              className="h-full bg-primary transition-all duration-300"
+              className="h-full bg-primary transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-muted-foreground text-center">
-            {Math.round(progress)}% complete
-          </p>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -86,7 +87,7 @@ export default function TasksWidget({ className }: TasksWidgetProps) {
             value={newTask}
             onChange={(e) => setNewTask(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-            className="flex-1"
+            className="flex-1 h-9 text-sm"
             data-testid="input-new-task"
           />
           <Button 
@@ -94,46 +95,57 @@ export default function TasksWidget({ className }: TasksWidgetProps) {
             onClick={handleAddTask}
             disabled={!newTask.trim() || createMutation.isPending}
             data-testid="button-add-task"
+            className="h-9 w-9"
           >
             <Plus className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0">
           {isLoading ? (
-            <div className="text-center py-4 text-muted-foreground">Loading...</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
           ) : tasks.length === 0 ? (
-            <div className="text-center py-4 text-muted-foreground">No tasks yet</div>
+            <div className="text-center py-8 text-muted-foreground">
+              <Circle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No tasks yet</p>
+              <p className="text-xs opacity-60">Add your first task above</p>
+            </div>
           ) : (
             tasks.map((task) => (
               <div
                 key={task.id}
-                className={`flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-muted/50 group ${
-                  task.completed ? 'opacity-60' : ''
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all group ${
+                  task.completed 
+                    ? 'bg-muted/30 border-transparent' 
+                    : 'bg-card border-border hover:border-primary/30'
                 }`}
                 data-testid={`task-${task.id}`}
               >
                 <button
-                  className="flex-shrink-0"
+                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                    task.completed 
+                      ? 'bg-primary border-primary' 
+                      : 'border-muted-foreground/40 hover:border-primary'
+                  }`}
                   onClick={() => toggleTask(task.id, task.completed)}
                 >
-                  {task.completed ? (
-                    <CheckSquare className="w-5 h-5 text-primary" />
-                  ) : (
-                    <Square className="w-5 h-5 text-muted-foreground" />
-                  )}
+                  {task.completed && <Check className="w-3 h-3 text-primary-foreground" />}
                 </button>
-                <span className={`text-sm flex-1 ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                <span className={`text-sm flex-1 transition-all ${
+                  task.completed 
+                    ? 'line-through text-muted-foreground' 
+                    : 'text-foreground'
+                }`}>
                   {task.text}
                 </span>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => deleteMutation.mutate(task.id)}
                   data-testid={`button-delete-task-${task.id}`}
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <X className="w-3 h-3" />
                 </Button>
               </div>
             ))
