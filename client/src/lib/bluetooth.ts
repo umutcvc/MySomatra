@@ -12,33 +12,51 @@ export interface SensorData {
   timestamp: number;
 }
 
+export interface PitchData {
+  pitch: number;
+  timestamp: number;
+}
+
+export interface GPSData {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  speed: number;
+  satellites: number;
+  fix: boolean;
+  timestamp: number;
+}
+
+export interface BatteryData {
+  voltage: number;
+  percentage: number;
+  timestamp: number;
+}
+
 export interface TherapyCommand {
   mode: string;
   intensity: number;
   pattern?: number[];
 }
 
-const ZENWEAR_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const ZENWEAR_TX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-const ZENWEAR_RX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-
-const IMU_SERVICE_UUID = '6e400010-b5a3-f393-e0a9-e50e24dcca9e';
-const IMU_DATA_CHARACTERISTIC_UUID = '6e400011-b5a3-f393-e0a9-e50e24dcca9e';
-
-const BATTERY_SERVICE_UUID = 'battery_service';
-const BATTERY_LEVEL_UUID = 'battery_level';
+const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_TX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
 class BluetoothService {
   private device: BluetoothDevice | null = null;
   private server: BluetoothRemoteGATTServer | null = null;
-  private txCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
-  private rxCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
-  private imuCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
-  private batteryCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private writeCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private notifyCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   
   private sensorDataCallback: ((data: SensorData) => void) | null = null;
+  private pitchDataCallback: ((data: PitchData) => void) | null = null;
+  private gpsDataCallback: ((data: GPSData) => void) | null = null;
+  private batteryDataCallback: ((data: BatteryData) => void) | null = null;
   private connectionCallback: ((connected: boolean) => void) | null = null;
-  private batteryCallback: ((level: number) => void) | null = null;
+  private rawMessageCallback: ((message: string) => void) | null = null;
+
+  private messageBuffer: string = '';
 
   isSupported(): boolean {
     return 'bluetooth' in navigator;
@@ -51,16 +69,8 @@ class BluetoothService {
 
     try {
       this.device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { namePrefix: 'ZenWear' },
-          { namePrefix: 'ZENWEAR' },
-          { namePrefix: 'Neural' },
-        ],
-        optionalServices: [
-          ZENWEAR_SERVICE_UUID,
-          IMU_SERVICE_UUID,
-          BATTERY_SERVICE_UUID,
-        ],
+        acceptAllDevices: true,
+        optionalServices: [NUS_SERVICE_UUID],
       });
 
       if (!this.device) {
@@ -97,48 +107,24 @@ class BluetoothService {
         throw new Error('Failed to connect to GATT server');
       }
 
-      try {
-        const uartService = await this.server.getPrimaryService(ZENWEAR_SERVICE_UUID);
-        this.txCharacteristic = await uartService.getCharacteristic(ZENWEAR_TX_CHARACTERISTIC_UUID);
-        this.rxCharacteristic = await uartService.getCharacteristic(ZENWEAR_RX_CHARACTERISTIC_UUID);
-        
-        await this.rxCharacteristic.startNotifications();
-        this.rxCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
-          this.handleRxData(event);
-        });
-      } catch (e) {
-        console.log('UART service not found, device may not support commands');
-      }
-
-      try {
-        const imuService = await this.server.getPrimaryService(IMU_SERVICE_UUID);
-        this.imuCharacteristic = await imuService.getCharacteristic(IMU_DATA_CHARACTERISTIC_UUID);
-        
-        await this.imuCharacteristic.startNotifications();
-        this.imuCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
-          this.handleIMUData(event);
-        });
-      } catch (e) {
-        console.log('IMU service not found');
-      }
-
-      try {
-        const batteryService = await this.server.getPrimaryService(BATTERY_SERVICE_UUID);
-        this.batteryCharacteristic = await batteryService.getCharacteristic(BATTERY_LEVEL_UUID);
-        
-        await this.batteryCharacteristic.startNotifications();
-        this.batteryCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
-          this.handleBatteryData(event);
-        });
-
-        const batteryValue = await this.batteryCharacteristic.readValue();
-        const batteryLevel = batteryValue.getUint8(0);
-        this.batteryCallback?.(batteryLevel);
-      } catch (e) {
-        console.log('Battery service not found');
-      }
+      const nusService = await this.server.getPrimaryService(NUS_SERVICE_UUID);
+      
+      this.writeCharacteristic = await nusService.getCharacteristic(NUS_RX_CHARACTERISTIC_UUID);
+      this.notifyCharacteristic = await nusService.getCharacteristic(NUS_TX_CHARACTERISTIC_UUID);
+      
+      await this.notifyCharacteristic.startNotifications();
+      this.notifyCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+        this.handleNotification(event);
+      });
 
       this.connectionCallback?.(true);
+
+      try {
+        await this.sendCommand('STREAM,ON');
+      } catch (e) {
+        console.log('Could not enable streaming, continuing anyway');
+      }
+
       return true;
     } catch (error) {
       console.error('Connection error:', error);
@@ -147,6 +133,14 @@ class BluetoothService {
   }
 
   async disconnect(): Promise<void> {
+    if (this.isConnected()) {
+      try {
+        await this.sendCommand('STREAM,OFF');
+      } catch (e) {
+        console.log('Could not send STREAM,OFF before disconnect');
+      }
+    }
+    
     if (this.server?.connected) {
       this.server.disconnect();
     }
@@ -155,129 +149,153 @@ class BluetoothService {
 
   private handleDisconnect(): void {
     this.server = null;
-    this.txCharacteristic = null;
-    this.rxCharacteristic = null;
-    this.imuCharacteristic = null;
-    this.batteryCharacteristic = null;
+    this.writeCharacteristic = null;
+    this.notifyCharacteristic = null;
+    this.messageBuffer = '';
     this.connectionCallback?.(false);
   }
 
-  private handleRxData(event: Event): void {
+  private handleNotification(event: Event): void {
     const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
     const value = target.value;
     if (!value) return;
 
     const decoder = new TextDecoder();
-    const data = decoder.decode(value);
-    console.log('Received from device:', data);
-  }
+    const chunk = decoder.decode(value);
+    this.messageBuffer += chunk;
 
-  private handleIMUData(event: Event): void {
-    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
-    const value = target.value;
-    if (!value) return;
+    const lines = this.messageBuffer.split('\n');
+    this.messageBuffer = lines.pop() || '';
 
-    const ax = value.getFloat32(0, true);
-    const ay = value.getFloat32(4, true);
-    const az = value.getFloat32(8, true);
-    const gx = value.getFloat32(12, true);
-    const gy = value.getFloat32(16, true);
-    const gz = value.getFloat32(20, true);
-
-    let activityType = 'Unknown';
-    if (value.byteLength > 24) {
-      const activityCode = value.getUint8(24);
-      activityType = this.decodeActivity(activityCode);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed) {
+        this.parseMessage(trimmed);
+      }
     }
-
-    const sensorData: SensorData = {
-      accelerometer: { x: ax, y: ay, z: az },
-      gyroscope: { x: gx, y: gy, z: gz },
-      activityType,
-      timestamp: Date.now(),
-    };
-
-    this.sensorDataCallback?.(sensorData);
   }
 
-  private decodeActivity(code: number): string {
-    const activities: { [key: number]: string } = {
-      0: 'Idle',
-      1: 'Walking',
-      2: 'Running',
-      3: 'Sitting',
-      4: 'Standing',
-      5: 'Lying Down',
-      6: 'Exercise',
-      7: 'Meditation',
-      8: 'Yoga',
-    };
-    return activities[code] || 'Unknown';
+  private parseMessage(message: string): void {
+    this.rawMessageCallback?.(message);
+
+    if (message.startsWith('PITCH,')) {
+      const pitchStr = message.substring(6);
+      const pitch = parseFloat(pitchStr);
+      if (!isNaN(pitch)) {
+        this.pitchDataCallback?.({
+          pitch,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    else if (message.startsWith('GPS,')) {
+      const parts = message.substring(4).split(',');
+      if (parts.length >= 5) {
+        const gpsData: GPSData = {
+          fix: parts[0] === '1',
+          latitude: parseFloat(parts[1]) || 0,
+          longitude: parseFloat(parts[2]) || 0,
+          altitude: parseFloat(parts[3]) || 0,
+          speed: parseFloat(parts[4]) || 0,
+          satellites: parts.length > 5 ? (parseInt(parts[5]) || 0) : 0,
+          timestamp: Date.now(),
+        };
+        this.gpsDataCallback?.(gpsData);
+      }
+    }
+    else if (message.startsWith('BATT,')) {
+      const parts = message.substring(5).split(',');
+      if (parts.length >= 2) {
+        this.batteryDataCallback?.({
+          voltage: parseFloat(parts[0]) || 0,
+          percentage: parseInt(parts[1]) || 0,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    else if (message.startsWith('ACK ') || message.startsWith('ERR ') || message.startsWith('RX:')) {
+      console.log('Device response:', message);
+    }
   }
 
-  private handleBatteryData(event: Event): void {
-    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
-    const value = target.value;
-    if (!value) return;
-
-    const batteryLevel = value.getUint8(0);
-    this.batteryCallback?.(batteryLevel);
-  }
-
-  async sendTherapyCommand(command: TherapyCommand): Promise<void> {
-    if (!this.txCharacteristic) {
-      console.log('TX characteristic not available, simulating command');
+  async sendCommand(command: string): Promise<void> {
+    if (!this.writeCharacteristic) {
+      console.log('Write characteristic not available');
       return;
     }
 
-    const modeMap: { [key: string]: number } = {
-      'relax': 1,
-      'sleep': 2,
-      'focus': 3,
-      'hype': 4,
-      'meditate': 5,
-      'recovery': 6,
-    };
+    if (!this.isConnected()) {
+      console.log('Device not connected');
+      return;
+    }
 
-    const modeCode = modeMap[command.mode] || 1;
-    const data = new Uint8Array([
-      0x01,
-      modeCode,
-      command.intensity,
-    ]);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(command);
+    await this.writeCharacteristic.writeValue(data);
+    console.log('Sent command:', command);
+  }
 
-    await this.txCharacteristic.writeValue(data);
+  async sendPWM(frequency: number, duty: number): Promise<void> {
+    await this.sendCommand(`PWM,${frequency},${duty}`);
+  }
+
+  async stopPWM(): Promise<void> {
+    await this.sendCommand('STOP');
+  }
+
+  async calibrateIMU(durationMs: number = 3000): Promise<void> {
+    await this.sendCommand(`CAL,${durationMs}`);
+  }
+
+  async setStreaming(enabled: boolean): Promise<void> {
+    await this.sendCommand(`STREAM,${enabled ? 'ON' : 'OFF'}`);
   }
 
   async startTherapy(mode: string, intensity: number): Promise<void> {
-    await this.sendTherapyCommand({ mode, intensity });
+    const freqMap: { [key: string]: number } = {
+      'relax': 40,
+      'sleep': 30,
+      'focus': 60,
+      'hype': 80,
+      'meditate': 35,
+      'recovery': 45,
+    };
     
-    const startCmd = new Uint8Array([0x02, 0x01]);
-    if (this.txCharacteristic) {
-      await this.txCharacteristic.writeValue(startCmd);
-    }
+    const freq = freqMap[mode] || 40;
+    const duty = Math.round(intensity * 0.8);
+    await this.sendPWM(freq, duty);
   }
 
   async stopTherapy(): Promise<void> {
-    if (!this.txCharacteristic) {
-      console.log('TX characteristic not available');
-      return;
-    }
-
-    const stopCmd = new Uint8Array([0x02, 0x00]);
-    await this.txCharacteristic.writeValue(stopCmd);
+    await this.stopPWM();
   }
 
   onSensorData(callback: (data: SensorData) => void): void {
     this.sensorDataCallback = callback;
   }
 
+  onPitchData(callback: (data: PitchData) => void): void {
+    this.pitchDataCallback = callback;
+  }
+
+  onGPSData(callback: (data: GPSData) => void): void {
+    this.gpsDataCallback = callback;
+  }
+
+  onBatteryData(callback: (data: BatteryData) => void): void {
+    this.batteryDataCallback = callback;
+  }
+
   onConnectionChange(callback: (connected: boolean) => void): void {
     this.connectionCallback = callback;
   }
 
+  onRawMessage(callback: (message: string) => void): void {
+    this.rawMessageCallback = callback;
+  }
+
   onBatteryChange(callback: (level: number) => void): void {
-    this.batteryCallback = callback;
+    this.onBatteryData((data) => callback(data.percentage));
   }
 
   isConnected(): boolean {

@@ -60,11 +60,27 @@ Preferred communication style: Simple, everyday language.
 
 ### External Dependencies
 
-**Web Bluetooth API**: Core technology for device connectivity. Enables browser-based communication with the ZenWear hardware using custom GATT services:
-- `6e400001-b5a3-f393-e0a9-e50e24dcca9e` - Main ZenWear service
-- IMU data characteristics for accelerometer/gyroscope readings
-- Battery level monitoring
-- TX/RX characteristics for bidirectional command/data flow
+**Web Bluetooth API**: Core technology for device connectivity. Enables browser-based communication with the ESP32-C3 hardware using Nordic UART Service (NUS):
+
+**BLE Service UUIDs**:
+- Service: `6e400001-b5a3-f393-e0a9-e50e24dcca9e` (Nordic UART Service)
+- RX Characteristic: `6e400002-b5a3-f393-e0a9-e50e24dcca9e` (Write - commands to device)
+- TX Characteristic: `6e400003-b5a3-f393-e0a9-e50e24dcca9e` (Notify - data from device)
+
+**Device Commands** (sent over RX characteristic):
+- `PWM,<freq>,<duty>` - Start/update vibration motor at frequency (Hz) and duty cycle (0-100%)
+- `STOP` - Stop vibration motor
+- `CAL,<ms>` - Calibrate IMU zero by averaging for specified milliseconds (default 3000)
+- `STREAM,ON|OFF` - Enable/disable IMU data streaming
+
+**Data Formats** (received over TX characteristic):
+- `PITCH,<degrees>` - IMU pitch angle in degrees (streamed at 100Hz)
+- `BATT,<voltage>,<percent>` - Battery voltage and percentage
+- `GPS,<fix>,<lat>,<lon>,<alt>,<speed>[,<sats>]` - GPS coordinates and status
+- `ACK <command>` - Command acknowledgement
+- `ERR <message>` - Error response
+
+**Device Name**: "DevOpBreadBoard" (appears in Chrome Bluetooth picker)
 
 **GPS Functionality**: Integrated into the device hardware, tracked via device connections and activity logs. Uses GPS data for outdoor activity mapping and location tracking.
 

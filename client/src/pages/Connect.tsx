@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Bluetooth, Loader2, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Bluetooth, LayoutDashboard } from "lucide-react";
 import { useLocation } from "wouter";
 import ThemeToggle from "@/components/ThemeToggle";
 import ConnectionStatus from "@/components/ConnectionStatus";
@@ -12,65 +11,62 @@ import JournalWidget from "@/components/dashboard/JournalWidget";
 import TasksWidget from "@/components/dashboard/TasksWidget";
 import ActivityWidget from "@/components/dashboard/ActivityWidget";
 import TherapyWidget from "@/components/dashboard/TherapyWidget";
+import IMUPlotWidget from "@/components/dashboard/IMUPlotWidget";
 import { useToast } from "@/hooks/use-toast";
-
-type ConnectionState = "idle" | "scanning" | "connecting" | "connected";
+import { useBluetooth } from "@/hooks/use-bluetooth";
 
 export default function Connect() {
   const [, setLocation] = useLocation();
-  const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
-  const [deviceInfo, setDeviceInfo] = useState<{
-    name: string;
-    battery: number;
-    signal: number;
-  } | null>(null);
   const { toast } = useToast();
+  
+  const {
+    isSupported,
+    isConnecting,
+    isConnected,
+    device,
+    batteryLevel,
+    error,
+    scanAndConnect,
+    disconnect,
+  } = useBluetooth();
 
   const handleScanDevices = async () => {
-    setConnectionState("scanning");
-    
-    if (!('bluetooth' in navigator)) {
+    if (!isSupported) {
       toast({
         title: "Bluetooth Not Supported",
         description: "Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.",
         variant: "destructive",
       });
-      setConnectionState("idle");
       return;
     }
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const success = await scanAndConnect();
       
-      setConnectionState("connecting");
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // todo: remove mock functionality - connect to real device
-      setDeviceInfo({
-        name: "ZenWear Neural #4891",
-        battery: 78,
-        signal: 85,
-      });
-      setConnectionState("connected");
-      
-      toast({
-        title: "Device Connected",
-        description: "Your ZenWear device is now connected and ready to use.",
-      });
-    } catch (error) {
-      console.error('Connection error:', error);
+      if (success) {
+        toast({
+          title: "Device Connected",
+          description: `Connected to ${device?.name || 'your device'}. Ready to use.`,
+        });
+      } else if (error) {
+        toast({
+          title: "Connection Issue",
+          description: error,
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error('Connection error:', err);
       toast({
         title: "Connection Failed",
         description: "Unable to connect to device. Please try again.",
         variant: "destructive",
       });
-      setConnectionState("idle");
     }
   };
 
-  const handleDisconnect = () => {
-    setDeviceInfo(null);
-    setConnectionState("idle");
+  const handleDisconnect = async () => {
+    await disconnect();
     toast({
       title: "Device Disconnected",
       description: "Your device has been disconnected.",
@@ -91,7 +87,7 @@ export default function Connect() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="text-xl font-semibold text-foreground">
-              {connectionState === "connected" ? (
+              {isConnected ? (
                 <span className="flex items-center gap-2">
                   <LayoutDashboard className="w-5 h-5 text-primary" />
                   Dashboard
@@ -106,14 +102,14 @@ export default function Connect() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {connectionState === "connected" && deviceInfo ? (
+        {isConnected && device ? (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-4 gap-6">
               <div className="lg:col-span-1">
                 <ConnectionStatus
-                  deviceName={deviceInfo.name}
-                  batteryLevel={deviceInfo.battery}
-                  signalStrength={deviceInfo.signal}
+                  deviceName={device.name}
+                  batteryLevel={batteryLevel || 0}
+                  signalStrength={85}
                   lastSync="Just now"
                 />
               </div>
@@ -123,7 +119,7 @@ export default function Connect() {
               </div>
 
               <div className="lg:col-span-2">
-                <MapWidget />
+                <IMUPlotWidget />
               </div>
             </div>
 
@@ -140,7 +136,11 @@ export default function Connect() {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6">
+              <MapWidget />
               <JournalWidget />
+            </div>
+            
+            <div className="grid lg:grid-cols-1 gap-6">
               <DeviceSettings onDisconnect={handleDisconnect} />
             </div>
           </div>
@@ -151,7 +151,7 @@ export default function Connect() {
                 Connect Your Device
               </h1>
               <p className="text-lg text-muted-foreground">
-                Pair your ZenWear neural therapy device via Bluetooth
+                Pair your neural therapy device via Bluetooth
               </p>
             </div>
 
@@ -166,45 +166,44 @@ export default function Connect() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
-                {connectionState === "scanning" && (
+                {isConnecting && (
                   <div className="text-center py-12">
                     <div className="relative mx-auto w-20 h-20 mb-6">
                       <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
                       <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
                       <Bluetooth className="absolute inset-0 m-auto w-8 h-8 text-primary" />
                     </div>
-                    <p className="text-muted-foreground">Scanning for devices...</p>
-                  </div>
-                )}
-
-                {connectionState === "connecting" && (
-                  <div className="text-center py-12">
-                    <div className="relative mx-auto w-20 h-20 mb-6">
-                      <div className="absolute inset-0 rounded-full bg-primary/20 animate-pulse" />
-                      <Bluetooth className="absolute inset-0 m-auto w-8 h-8 text-primary" />
-                    </div>
                     <p className="text-muted-foreground">Connecting to device...</p>
                   </div>
                 )}
 
-                {connectionState === "idle" && (
+                {!isConnecting && (
                   <div className="space-y-6">
                     <Button
                       size="lg"
                       className="w-full py-6 text-lg rounded-xl"
                       onClick={handleScanDevices}
+                      disabled={isConnecting}
                       data-testid="button-scan-devices"
                     >
                       <Bluetooth className="w-5 h-5 mr-2" />
                       Scan for Devices
                     </Button>
 
+                    {!isSupported && (
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
+                        <p className="text-sm text-destructive">
+                          Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera on desktop.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="bg-muted/50 rounded-xl p-6">
                       <h4 className="font-medium text-foreground mb-3">Before connecting:</h4>
                       <ul className="space-y-2 text-sm text-muted-foreground">
                         <li className="flex items-start gap-2">
                           <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
-                          Ensure Bluetooth is enabled on your computer or phone
+                          Ensure Bluetooth is enabled on your computer
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
@@ -212,9 +211,23 @@ export default function Connect() {
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
-                          Power on your ZenWear device and hold it nearby
+                          Power on your device - look for "DevOpBreadBoard" in the list
                         </li>
                       </ul>
+                    </div>
+
+                    <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                      <h4 className="font-medium text-foreground mb-2 text-sm">Device Commands</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground font-mono">
+                        <div>PWM,freq,duty</div>
+                        <div className="text-right">Start vibration</div>
+                        <div>STOP</div>
+                        <div className="text-right">Stop vibration</div>
+                        <div>CAL,3000</div>
+                        <div className="text-right">Calibrate IMU (3s)</div>
+                        <div>STREAM,ON/OFF</div>
+                        <div className="text-right">Toggle data stream</div>
+                      </div>
                     </div>
                   </div>
                 )}

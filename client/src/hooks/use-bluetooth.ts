@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { bluetoothService, type DeviceInfo, type SensorData } from '@/lib/bluetooth';
+import { bluetoothService, type DeviceInfo, type SensorData, type PitchData, type GPSData, type BatteryData } from '@/lib/bluetooth';
 
 interface BluetoothState {
   isSupported: boolean;
@@ -7,9 +7,15 @@ interface BluetoothState {
   isConnected: boolean;
   device: DeviceInfo | null;
   batteryLevel: number | null;
+  batteryVoltage: number | null;
   sensorData: SensorData | null;
+  pitchData: PitchData | null;
+  pitchHistory: PitchData[];
+  gpsData: GPSData | null;
   error: string | null;
 }
+
+const MAX_PITCH_HISTORY = 200;
 
 export function useBluetooth() {
   const [state, setState] = useState<BluetoothState>({
@@ -18,7 +24,11 @@ export function useBluetooth() {
     isConnected: false,
     device: null,
     batteryLevel: null,
+    batteryVoltage: null,
     sensorData: null,
+    pitchData: null,
+    pitchHistory: [],
+    gpsData: null,
     error: null,
   });
 
@@ -33,20 +43,43 @@ export function useBluetooth() {
         ...prev,
         isConnected: connected,
         isConnecting: false,
+        pitchHistory: connected ? prev.pitchHistory : [],
       }));
     });
 
-    bluetoothService.onBatteryChange((level) => {
+    bluetoothService.onBatteryData((data: BatteryData) => {
       setState(prev => ({
         ...prev,
-        batteryLevel: level,
+        batteryLevel: data.percentage,
+        batteryVoltage: data.voltage,
       }));
     });
 
-    bluetoothService.onSensorData((data) => {
+    bluetoothService.onSensorData((data: SensorData) => {
       setState(prev => ({
         ...prev,
         sensorData: data,
+      }));
+    });
+
+    bluetoothService.onPitchData((data: PitchData) => {
+      setState(prev => {
+        const newHistory = [...prev.pitchHistory, data];
+        if (newHistory.length > MAX_PITCH_HISTORY) {
+          newHistory.shift();
+        }
+        return {
+          ...prev,
+          pitchData: data,
+          pitchHistory: newHistory,
+        };
+      });
+    });
+
+    bluetoothService.onGPSData((data: GPSData) => {
+      setState(prev => ({
+        ...prev,
+        gpsData: data,
       }));
     });
   }, []);
@@ -56,6 +89,7 @@ export function useBluetooth() {
       ...prev,
       isConnecting: true,
       error: null,
+      pitchHistory: [],
     }));
 
     try {
@@ -107,7 +141,11 @@ export function useBluetooth() {
         isConnected: false,
         device: null,
         batteryLevel: null,
+        batteryVoltage: null,
         sensorData: null,
+        pitchData: null,
+        pitchHistory: [],
+        gpsData: null,
       }));
     } catch (error) {
       console.error('Disconnect error:', error);
@@ -130,11 +168,29 @@ export function useBluetooth() {
     }
   }, []);
 
+  const calibrateIMU = useCallback(async (durationMs: number = 3000) => {
+    try {
+      await bluetoothService.calibrateIMU(durationMs);
+    } catch (error) {
+      console.error('Failed to calibrate IMU:', error);
+    }
+  }, []);
+
+  const sendCommand = useCallback(async (command: string) => {
+    try {
+      await bluetoothService.sendCommand(command);
+    } catch (error) {
+      console.error('Failed to send command:', error);
+    }
+  }, []);
+
   return {
     ...state,
     scanAndConnect,
     disconnect,
     startTherapy,
     stopTherapy,
+    calibrateIMU,
+    sendCommand,
   };
 }
