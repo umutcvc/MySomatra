@@ -23,6 +23,8 @@ export interface GPSData {
   altitude: number;
   speed: number;
   satellites: number;
+  hdop: number;
+  course: number;
   fix: boolean;
   timestamp: number;
 }
@@ -43,20 +45,28 @@ const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const NUS_RX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 const NUS_TX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
+type ConnectionCallback = (connected: boolean) => void;
+type PitchCallback = (data: PitchData) => void;
+type GPSCallback = (data: GPSData) => void;
+type BatteryCallback = (data: BatteryData) => void;
+type SensorCallback = (data: SensorData) => void;
+type RawMessageCallback = (message: string) => void;
+
 class BluetoothService {
   private device: BluetoothDevice | null = null;
   private server: BluetoothRemoteGATTServer | null = null;
   private writeCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private notifyCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   
-  private sensorDataCallback: ((data: SensorData) => void) | null = null;
-  private pitchDataCallback: ((data: PitchData) => void) | null = null;
-  private gpsDataCallback: ((data: GPSData) => void) | null = null;
-  private batteryDataCallback: ((data: BatteryData) => void) | null = null;
-  private connectionCallback: ((connected: boolean) => void) | null = null;
-  private rawMessageCallback: ((message: string) => void) | null = null;
+  private connectionCallbacks: Set<ConnectionCallback> = new Set();
+  private pitchCallbacks: Set<PitchCallback> = new Set();
+  private gpsCallbacks: Set<GPSCallback> = new Set();
+  private batteryCallbacks: Set<BatteryCallback> = new Set();
+  private sensorCallbacks: Set<SensorCallback> = new Set();
+  private rawMessageCallbacks: Set<RawMessageCallback> = new Set();
 
   private messageBuffer: string = '';
+  private _isConnected: boolean = false;
 
   isSupported(): boolean {
     return 'bluetooth' in navigator;
@@ -117,7 +127,8 @@ class BluetoothService {
         this.handleNotification(event);
       });
 
-      this.connectionCallback?.(true);
+      this._isConnected = true;
+      this.notifyConnectionChange(true);
 
       try {
         await this.sendCommand('STREAM,ON');
@@ -133,11 +144,12 @@ class BluetoothService {
   }
 
   async disconnect(): Promise<void> {
-    if (this.isConnected()) {
+    if (this._isConnected) {
       try {
         await this.sendCommand('STREAM,OFF');
+        await this.sendCommand('STOP');
       } catch (e) {
-        console.log('Could not send STREAM,OFF before disconnect');
+        console.log('Could not send disconnect commands');
       }
     }
     
@@ -152,7 +164,12 @@ class BluetoothService {
     this.writeCharacteristic = null;
     this.notifyCharacteristic = null;
     this.messageBuffer = '';
-    this.connectionCallback?.(false);
+    this._isConnected = false;
+    this.notifyConnectionChange(false);
+  }
+
+  private notifyConnectionChange(connected: boolean): void {
+    this.connectionCallbacks.forEach(cb => cb(connected));
   }
 
   private handleNotification(event: Event): void {
@@ -176,16 +193,14 @@ class BluetoothService {
   }
 
   private parseMessage(message: string): void {
-    this.rawMessageCallback?.(message);
+    this.rawMessageCallbacks.forEach(cb => cb(message));
 
     if (message.startsWith('PITCH,')) {
       const pitchStr = message.substring(6);
       const pitch = parseFloat(pitchStr);
       if (!isNaN(pitch)) {
-        this.pitchDataCallback?.({
-          pitch,
-          timestamp: Date.now(),
-        });
+        const data: PitchData = { pitch, timestamp: Date.now() };
+        this.pitchCallbacks.forEach(cb => cb(data));
       }
     }
     else if (message.startsWith('GPS,')) {
@@ -196,24 +211,27 @@ class BluetoothService {
           latitude: parseFloat(parts[1]) || 0,
           longitude: parseFloat(parts[2]) || 0,
           altitude: parseFloat(parts[3]) || 0,
-          speed: parseFloat(parts[4]) || 0,
-          satellites: parts.length > 5 ? (parseInt(parts[5]) || 0) : 0,
+          satellites: parts.length > 4 ? (parseInt(parts[4]) || 0) : 0,
+          hdop: parts.length > 5 ? (parseFloat(parts[5]) || 0) : 0,
+          speed: parts.length > 6 ? (parseFloat(parts[6]) || 0) : 0,
+          course: parts.length > 7 ? (parseFloat(parts[7]) || 0) : 0,
           timestamp: Date.now(),
         };
-        this.gpsDataCallback?.(gpsData);
+        this.gpsCallbacks.forEach(cb => cb(gpsData));
       }
     }
     else if (message.startsWith('BATT,')) {
       const parts = message.substring(5).split(',');
       if (parts.length >= 2) {
-        this.batteryDataCallback?.({
+        const data: BatteryData = {
           voltage: parseFloat(parts[0]) || 0,
           percentage: parseInt(parts[1]) || 0,
           timestamp: Date.now(),
-        });
+        };
+        this.batteryCallbacks.forEach(cb => cb(data));
       }
     }
-    else if (message.startsWith('ACK ') || message.startsWith('ERR ') || message.startsWith('RX:')) {
+    else if (message.startsWith('ACK ') || message.startsWith('ERR ') || message.startsWith('RX:') || message.startsWith('RATE ')) {
       console.log('Device response:', message);
     }
   }
@@ -224,7 +242,7 @@ class BluetoothService {
       return;
     }
 
-    if (!this.isConnected()) {
+    if (!this._isConnected) {
       console.log('Device not connected');
       return;
     }
@@ -236,7 +254,9 @@ class BluetoothService {
   }
 
   async sendPWM(frequency: number, duty: number): Promise<void> {
-    await this.sendCommand(`PWM,${frequency},${duty}`);
+    const freq = Math.max(1, Math.min(20000, Math.round(frequency)));
+    const d = Math.max(0, Math.min(100, Math.round(duty)));
+    await this.sendCommand(`PWM,${freq},${d}`);
   }
 
   async stopPWM(): Promise<void> {
@@ -261,7 +281,7 @@ class BluetoothService {
       'recovery': 45,
     };
     
-    const freq = freqMap[mode] || 40;
+    const freq = freqMap[mode.toLowerCase()] || 40;
     const duty = Math.round(intensity * 0.8);
     await this.sendPWM(freq, duty);
   }
@@ -270,36 +290,42 @@ class BluetoothService {
     await this.stopPWM();
   }
 
-  onSensorData(callback: (data: SensorData) => void): void {
-    this.sensorDataCallback = callback;
+  onConnectionChange(callback: ConnectionCallback): () => void {
+    this.connectionCallbacks.add(callback);
+    return () => this.connectionCallbacks.delete(callback);
   }
 
-  onPitchData(callback: (data: PitchData) => void): void {
-    this.pitchDataCallback = callback;
+  onPitchData(callback: PitchCallback): () => void {
+    this.pitchCallbacks.add(callback);
+    return () => this.pitchCallbacks.delete(callback);
   }
 
-  onGPSData(callback: (data: GPSData) => void): void {
-    this.gpsDataCallback = callback;
+  onGPSData(callback: GPSCallback): () => void {
+    this.gpsCallbacks.add(callback);
+    return () => this.gpsCallbacks.delete(callback);
   }
 
-  onBatteryData(callback: (data: BatteryData) => void): void {
-    this.batteryDataCallback = callback;
+  onBatteryData(callback: BatteryCallback): () => void {
+    this.batteryCallbacks.add(callback);
+    return () => this.batteryCallbacks.delete(callback);
   }
 
-  onConnectionChange(callback: (connected: boolean) => void): void {
-    this.connectionCallback = callback;
+  onSensorData(callback: SensorCallback): () => void {
+    this.sensorCallbacks.add(callback);
+    return () => this.sensorCallbacks.delete(callback);
   }
 
-  onRawMessage(callback: (message: string) => void): void {
-    this.rawMessageCallback = callback;
+  onRawMessage(callback: RawMessageCallback): () => void {
+    this.rawMessageCallbacks.add(callback);
+    return () => this.rawMessageCallbacks.delete(callback);
   }
 
-  onBatteryChange(callback: (level: number) => void): void {
-    this.onBatteryData((data) => callback(data.percentage));
+  onBatteryChange(callback: (level: number) => void): () => void {
+    return this.onBatteryData((data) => callback(data.percentage));
   }
 
   isConnected(): boolean {
-    return this.server?.connected || false;
+    return this._isConnected;
   }
 
   getDeviceName(): string {

@@ -80,8 +80,11 @@ export default function DeviceShowcase({ selectedMode, onModeSelect }: DeviceSho
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-16 items-center mb-16">
           <div className="relative">
-            <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
+            <div 
+              className="relative rounded-3xl p-8 overflow-hidden"
+              style={{ backgroundColor: '#1a1f2e' }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
               <img
                 src={deviceImage}
                 alt="MySomatra Neural Therapy Device"

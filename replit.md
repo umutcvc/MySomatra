@@ -1,12 +1,15 @@
-# ZenWear - Neural Therapy Wearable Device
+# MySomatra - Neural Therapy Wearable Device
 
 ## Overview
 
-ZenWear is a wellness wearable device that provides neural therapy through precision vibrations, motion tracking, and GPS functionality. The application consists of a marketing website showcasing the device features and a web-based dashboard for connecting and controlling the device via Web Bluetooth API. Users can track activities, manage therapy sessions, maintain wellness journals, and monitor device metrics in real-time.
+MySomatra is a wellness wearable device that provides neural therapy through precision vibrations, motion tracking, and GPS functionality. The application consists of a marketing website showcasing the device features and a web-based dashboard for connecting and controlling the device via Web Bluetooth API. Users can track activities, manage therapy sessions, maintain wellness journals, and monitor device metrics in real-time.
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+- **Theme**: Always dark mode (no light mode toggle)
+- **Design**: Minimalist Apple-style with black backgrounds
+- **Hero Section**: Animated neural network visualization with color-shifting gradients
+- **Communication style**: Simple, everyday language
 
 ## System Architecture
 

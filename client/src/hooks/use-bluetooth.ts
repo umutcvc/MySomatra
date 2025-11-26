@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import { bluetoothService, type DeviceInfo, type SensorData, type PitchData, type GPSData, type BatteryData } from '@/lib/bluetooth';
 
 interface BluetoothState {
@@ -12,91 +12,134 @@ interface BluetoothState {
   pitchData: PitchData | null;
   pitchHistory: PitchData[];
   gpsData: GPSData | null;
+  gpsHistory: GPSData[];
   error: string | null;
 }
 
 const MAX_PITCH_HISTORY = 200;
+const MAX_GPS_HISTORY = 100;
 
-export function useBluetooth() {
-  const [state, setState] = useState<BluetoothState>({
-    isSupported: false,
-    isConnecting: false,
-    isConnected: false,
-    device: null,
-    batteryLevel: null,
-    batteryVoltage: null,
-    sensorData: null,
-    pitchData: null,
-    pitchHistory: [],
-    gpsData: null,
-    error: null,
+let globalState: BluetoothState = {
+  isSupported: false,
+  isConnecting: false,
+  isConnected: false,
+  device: null,
+  batteryLevel: null,
+  batteryVoltage: null,
+  sensorData: null,
+  pitchData: null,
+  pitchHistory: [],
+  gpsData: null,
+  gpsHistory: [],
+  error: null,
+};
+
+const listeners = new Set<() => void>();
+
+function notifyListeners() {
+  listeners.forEach(listener => listener());
+}
+
+function updateGlobalState(updater: (prev: BluetoothState) => BluetoothState) {
+  globalState = updater(globalState);
+  notifyListeners();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return globalState;
+}
+
+let initialized = false;
+
+function initializeBluetoothListeners() {
+  if (initialized) return;
+  initialized = true;
+
+  updateGlobalState(prev => ({
+    ...prev,
+    isSupported: bluetoothService.isSupported(),
+  }));
+
+  bluetoothService.onConnectionChange((connected) => {
+    updateGlobalState(prev => ({
+      ...prev,
+      isConnected: connected,
+      isConnecting: false,
+      pitchHistory: connected ? prev.pitchHistory : [],
+      gpsHistory: connected ? prev.gpsHistory : [],
+    }));
   });
 
-  useEffect(() => {
-    setState(prev => ({
+  bluetoothService.onBatteryData((data: BatteryData) => {
+    updateGlobalState(prev => ({
       ...prev,
-      isSupported: bluetoothService.isSupported(),
+      batteryLevel: data.percentage,
+      batteryVoltage: data.voltage,
     }));
+  });
 
-    bluetoothService.onConnectionChange((connected) => {
-      setState(prev => ({
+  bluetoothService.onSensorData((data: SensorData) => {
+    updateGlobalState(prev => ({
+      ...prev,
+      sensorData: data,
+    }));
+  });
+
+  bluetoothService.onPitchData((data: PitchData) => {
+    updateGlobalState(prev => {
+      const newHistory = [...prev.pitchHistory, data];
+      if (newHistory.length > MAX_PITCH_HISTORY) {
+        newHistory.shift();
+      }
+      return {
         ...prev,
-        isConnected: connected,
-        isConnecting: false,
-        pitchHistory: connected ? prev.pitchHistory : [],
-      }));
+        pitchData: data,
+        pitchHistory: newHistory,
+      };
     });
+  });
 
-    bluetoothService.onBatteryData((data: BatteryData) => {
-      setState(prev => ({
-        ...prev,
-        batteryLevel: data.percentage,
-        batteryVoltage: data.voltage,
-      }));
-    });
-
-    bluetoothService.onSensorData((data: SensorData) => {
-      setState(prev => ({
-        ...prev,
-        sensorData: data,
-      }));
-    });
-
-    bluetoothService.onPitchData((data: PitchData) => {
-      setState(prev => {
-        const newHistory = [...prev.pitchHistory, data];
-        if (newHistory.length > MAX_PITCH_HISTORY) {
-          newHistory.shift();
-        }
-        return {
-          ...prev,
-          pitchData: data,
-          pitchHistory: newHistory,
-        };
-      });
-    });
-
-    bluetoothService.onGPSData((data: GPSData) => {
-      setState(prev => ({
+  bluetoothService.onGPSData((data: GPSData) => {
+    updateGlobalState(prev => {
+      const newHistory = [...prev.gpsHistory, data];
+      if (newHistory.length > MAX_GPS_HISTORY) {
+        newHistory.shift();
+      }
+      return {
         ...prev,
         gpsData: data,
-      }));
+        gpsHistory: newHistory,
+      };
     });
+  });
+}
+
+export function useBluetooth() {
+  useEffect(() => {
+    initializeBluetoothListeners();
   }, []);
 
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
   const scanAndConnect = useCallback(async () => {
-    setState(prev => ({
+    updateGlobalState(prev => ({
       ...prev,
       isConnecting: true,
       error: null,
       pitchHistory: [],
+      gpsHistory: [],
     }));
 
     try {
       const deviceInfo = await bluetoothService.requestDevice();
       
       if (!deviceInfo) {
-        setState(prev => ({
+        updateGlobalState(prev => ({
           ...prev,
           isConnecting: false,
           error: 'No device selected',
@@ -104,14 +147,14 @@ export function useBluetooth() {
         return false;
       }
 
-      setState(prev => ({
+      updateGlobalState(prev => ({
         ...prev,
         device: deviceInfo,
       }));
 
       await bluetoothService.connect();
       
-      setState(prev => ({
+      updateGlobalState(prev => ({
         ...prev,
         isConnected: true,
         isConnecting: false,
@@ -124,7 +167,7 @@ export function useBluetooth() {
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection failed';
-      setState(prev => ({
+      updateGlobalState(prev => ({
         ...prev,
         isConnecting: false,
         error: message,
@@ -136,7 +179,7 @@ export function useBluetooth() {
   const disconnect = useCallback(async () => {
     try {
       await bluetoothService.disconnect();
-      setState(prev => ({
+      updateGlobalState(prev => ({
         ...prev,
         isConnected: false,
         device: null,
@@ -146,6 +189,7 @@ export function useBluetooth() {
         pitchData: null,
         pitchHistory: [],
         gpsData: null,
+        gpsHistory: [],
       }));
     } catch (error) {
       console.error('Disconnect error:', error);
