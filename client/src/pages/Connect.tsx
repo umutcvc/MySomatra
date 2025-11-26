@@ -1,10 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Bluetooth, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Bluetooth, LayoutDashboard, Power } from "lucide-react";
 import { useLocation } from "wouter";
-import ThemeToggle from "@/components/ThemeToggle";
 import ConnectionStatus from "@/components/ConnectionStatus";
-import DeviceSettings from "@/components/DeviceSettings";
 import MapWidget from "@/components/dashboard/MapWidget";
 import CalendarWidget from "@/components/dashboard/CalendarWidget";
 import JournalWidget from "@/components/dashboard/JournalWidget";
@@ -97,7 +95,6 @@ export default function Connect() {
               )}
             </div>
           </div>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -140,8 +137,17 @@ export default function Connect() {
               <JournalWidget />
             </div>
             
-            <div className="grid lg:grid-cols-1 gap-6">
-              <DeviceSettings onDisconnect={handleDisconnect} />
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleDisconnect}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                data-testid="button-disconnect"
+              >
+                <Power className="w-4 h-4 mr-2" />
+                Disconnect Device
+              </Button>
             </div>
           </div>
         ) : (

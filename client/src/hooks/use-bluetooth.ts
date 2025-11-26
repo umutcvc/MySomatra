@@ -60,9 +60,19 @@ function initializeBluetoothListeners() {
   if (initialized) return;
   initialized = true;
 
+  // Sync initial state from the bluetooth service
+  const currentlyConnected = bluetoothService.isConnected();
+  
   updateGlobalState(prev => ({
     ...prev,
     isSupported: bluetoothService.isSupported(),
+    isConnected: currentlyConnected,
+    device: currentlyConnected ? {
+      id: bluetoothService.getDeviceId(),
+      name: bluetoothService.getDeviceName(),
+      device: null,
+      connected: true,
+    } : prev.device,
   }));
 
   bluetoothService.onConnectionChange((connected) => {
@@ -70,6 +80,12 @@ function initializeBluetoothListeners() {
       ...prev,
       isConnected: connected,
       isConnecting: false,
+      device: connected ? {
+        id: bluetoothService.getDeviceId(),
+        name: bluetoothService.getDeviceName(),
+        device: null,
+        connected: true,
+      } : null,
       pitchHistory: connected ? prev.pitchHistory : [],
       gpsHistory: connected ? prev.gpsHistory : [],
     }));
