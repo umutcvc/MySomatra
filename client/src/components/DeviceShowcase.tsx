@@ -101,18 +101,18 @@ export default function DeviceShowcase({ selectedMode, onModeSelect }: DeviceSho
               </style>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-3 mt-6">
+            <div className="flex flex-wrap justify-center gap-4 mt-6">
               {features.map((feature, index) => {
                 const Icon = feature.icon;
                 return (
-                  <Badge 
+                  <div 
                     key={index}
-                    className="px-4 py-2 bg-card border border-border"
+                    className="flex items-center justify-center w-12 h-12 rounded-full bg-black/50 border border-primary/30"
                     data-testid={`badge-feature-${index}`}
+                    title={feature.label}
                   >
-                    <Icon className="w-4 h-4 mr-2 text-primary" />
-                    {feature.label}
-                  </Badge>
+                    <Icon className="w-5 h-5 text-primary" />
+                  </div>
                 );
               })}
             </div>

@@ -180,7 +180,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           <Button
             size="lg"
             onClick={onConnectClick}
-            className="px-8 py-6 text-lg rounded-full bg-white text-black hover:bg-white/90"
+            className="px-8 py-6 text-lg rounded-full"
             data-testid="button-connect-hero"
           >
             Connect Device
