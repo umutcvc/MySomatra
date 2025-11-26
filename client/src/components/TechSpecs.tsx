@@ -1,5 +1,5 @@
 import { Brain, Cpu, MapPin, Battery, Bluetooth, Waves } from "lucide-react";
-import { ScrollFade } from "@/hooks/use-scroll-fade";
+import { ScrollFade } from "@/components/ScrollFade";
 
 const specs = [
   {

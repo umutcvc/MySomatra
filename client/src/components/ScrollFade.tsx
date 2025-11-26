@@ -6,7 +6,7 @@ interface ScrollFadeOptions {
   triggerOnce?: boolean;
 }
 
-export function useScrollFade(options: ScrollFadeOptions = {}) {
+function useScrollFade(options: ScrollFadeOptions = {}) {
   const { 
     threshold = 0.1, 
     rootMargin = '0px 0px -50px 0px',
@@ -43,38 +43,6 @@ export function useScrollFade(options: ScrollFadeOptions = {}) {
   return { ref, isVisible };
 }
 
-export function useScrollProgress() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const handleScroll = () => {
-      const rect = element.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      
-      // Calculate progress from 0 to 1
-      // 0 = element just entered viewport from bottom
-      // 1 = element has left viewport from top
-      const elementTop = rect.top;
-      const elementHeight = rect.height;
-      
-      // Progress based on element position relative to viewport center
-      const visibleProgress = 1 - (elementTop / (windowHeight + elementHeight));
-      setProgress(Math.max(0, Math.min(1, visibleProgress)));
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // Initial check
-
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return { ref, progress };
-}
-
 interface ScrollFadeProps {
   children: React.ReactNode;
   className?: string;
@@ -93,7 +61,7 @@ export function ScrollFade({
   distance = 30,
   duration = 0.6,
   triggerOnce = true
-}: ScrollFadeProps): JSX.Element {
+}: ScrollFadeProps) {
   const { ref, isVisible } = useScrollFade({ triggerOnce });
 
   const getTransform = useCallback(() => {
@@ -123,3 +91,5 @@ export function ScrollFade({
     </div>
   );
 }
+
+export default ScrollFade;

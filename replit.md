@@ -32,6 +32,10 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 
 **Design Philosophy**: Premium wellness aesthetic inspired by Apple's minimalist approach combined with calming wellness app designs. Emphasizes generous whitespace, elegant simplicity, and sensory connection through visual metaphors.
 
+**Scroll Animations**: Apple-style scroll-based fade animations using Intersection Observer API. The `ScrollFade` component in `client/src/components/ScrollFade.tsx` provides fade-in animations with directional movement (up, down, left, right) triggered when elements enter the viewport.
+
+**Hero Section Layout**: Split layout with animated neural network canvas on the left (60% width) and video background on the right (50% width) with blur/fade overlay. Hero content fades out as user scrolls down.
+
 ### Backend Architecture
 
 **Runtime**: Node.js with Express.js server framework using ESM modules.

@@ -1,4 +1,4 @@
-import { ScrollFade } from "@/hooks/use-scroll-fade";
+import { ScrollFade } from "@/components/ScrollFade";
 import vagusImage from "@assets/generated_images/vagus_nerve_relaxation_scene.png";
 import sleepImage from "@assets/generated_images/sleep_therapy_scene.png";
 import yogaImage from "@assets/generated_images/activity_tracking_yoga_scene.png";

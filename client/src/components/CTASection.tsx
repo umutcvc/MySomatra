@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Bluetooth, Globe, Sparkles } from "lucide-react";
-import { ScrollFade } from "@/hooks/use-scroll-fade";
+import { ScrollFade } from "@/components/ScrollFade";
 
 interface CTASectionProps {
   onConnectClick: () => void;

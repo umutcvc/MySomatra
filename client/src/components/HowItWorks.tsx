@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Watch, Bluetooth, Sparkles, Brain } from "lucide-react";
-import { ScrollFade } from "@/hooks/use-scroll-fade";
+import { ScrollFade } from "@/components/ScrollFade";
 
 export default function HowItWorks() {
   const steps = [

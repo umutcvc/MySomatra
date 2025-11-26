@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Brain, Zap, Activity, MapPin, Moon, Sparkles, Heart, Wind } from "lucide-react";
 import { useState } from "react";
-import { ScrollFade } from "@/hooks/use-scroll-fade";
+import { ScrollFade } from "@/components/ScrollFade";
 import deviceImage from "@assets/generated_images/compact_mysomatra_device_with_logo.png";
 
 const modes = [
