@@ -7,7 +7,7 @@ export default function HowItWorks() {
       number: "01",
       icon: Watch,
       title: "Place Your Device",
-      description: "Position ZenWear on your preferred body location - neck for vagus nerve, chest for breathing, or any pressure point."
+      description: "Position MySomatra on your preferred body location - neck for vagus nerve, chest for breathing, or any pressure point."
     },
     {
       number: "02",
@@ -30,42 +30,42 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section className="py-32 px-6 bg-card">
+    <section className="py-24 px-6 bg-card">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-20">
-          <h2 className="text-4xl md:text-6xl font-semibold mb-6 text-foreground tracking-tight">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-semibold mb-4 text-foreground tracking-tight">
             How It Works
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto">
             Four simple steps to begin your neural wellness journey
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
               <div key={index} className="relative">
-                <Card className="h-full hover-elevate border-2 border-transparent hover:border-primary/20 transition-colors" data-testid={`card-step-${index + 1}`}>
-                  <CardContent className="p-8">
-                    <div className="text-7xl font-bold text-primary/10 mb-4">
+                <Card className="h-full hover-elevate" data-testid={`card-step-${index + 1}`}>
+                  <CardContent className="p-6">
+                    <div className="text-5xl font-bold text-primary/10 mb-3">
                       {step.number}
                     </div>
-                    <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 mb-6">
-                      <Icon className="w-8 h-8 text-primary" />
+                    <div className="inline-flex p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 mb-4">
+                      <Icon className="w-6 h-6 text-primary" />
                     </div>
-                    <h3 className="text-xl font-medium mb-4 text-foreground">
+                    <h3 className="text-lg font-medium mb-2 text-foreground">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground leading-relaxed">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {step.description}
                     </p>
                   </CardContent>
                 </Card>
 
                 {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2 z-10">
-                    <div className="w-8 h-0.5 bg-primary/20" />
+                  <div className="hidden lg:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                    <div className="w-6 h-0.5 bg-primary/20" />
                   </div>
                 )}
               </div>
