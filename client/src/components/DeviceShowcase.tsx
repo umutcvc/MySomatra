@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Brain, Zap, Activity, MapPin } from "lucide-react";
-import deviceImage from "@assets/generated_images/neural_therapy_device_product.png";
+import deviceImage from "@assets/generated_images/device_product_transparent_bg.png";
 
 export default function DeviceShowcase() {
   const features = [
@@ -28,9 +28,10 @@ export default function DeviceShowcase() {
             <img
               src={deviceImage}
               alt="ZenWear Neural Therapy Device"
-              className="w-full max-w-md mx-auto"
+              className="w-full max-w-md mx-auto drop-shadow-2xl"
               style={{
-                animation: 'float 6s ease-in-out infinite'
+                animation: 'float 6s ease-in-out infinite',
+                filter: 'drop-shadow(0 25px 50px rgba(0, 200, 200, 0.3))'
               }}
             />
             <style>

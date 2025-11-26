@@ -163,7 +163,7 @@ class BluetoothService {
   }
 
   private handleRxData(event: Event): void {
-    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
     const value = target.value;
     if (!value) return;
 
@@ -173,7 +173,7 @@ class BluetoothService {
   }
 
   private handleIMUData(event: Event): void {
-    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
     const value = target.value;
     if (!value) return;
 
@@ -216,7 +216,7 @@ class BluetoothService {
   }
 
   private handleBatteryData(event: Event): void {
-    const target = event.target as BluetoothRemoteGATTCharacteristic;
+    const target = event.target as unknown as BluetoothRemoteGATTCharacteristic;
     const value = target.value;
     if (!value) return;
 
