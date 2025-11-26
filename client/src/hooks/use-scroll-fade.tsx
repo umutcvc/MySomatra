@@ -93,7 +93,7 @@ export function ScrollFade({
   distance = 30,
   duration = 0.6,
   triggerOnce = true
-}: ScrollFadeProps) {
+}: ScrollFadeProps): JSX.Element {
   const { ref, isVisible } = useScrollFade({ triggerOnce });
 
   const getTransform = useCallback(() => {

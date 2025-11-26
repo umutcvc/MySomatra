@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import relaxVideo from "@assets/generated_videos/person_relaxing_with_mysomatra_device.mp4";
 
 interface HeroSectionProps {
   onConnectClick: () => void;
@@ -21,6 +22,27 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
   const animationRef = useRef<number | null>(null);
   const neuronsRef = useRef<Neuron[]>([]);
   const timeRef = useRef(0);
+  const [scrollOpacity, setScrollOpacity] = useState(1);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const fadeStart = windowHeight * 0.2;
+      const fadeEnd = windowHeight * 0.7;
+      
+      if (scrollY < fadeStart) {
+        setScrollOpacity(1);
+      } else if (scrollY > fadeEnd) {
+        setScrollOpacity(0);
+      } else {
+        setScrollOpacity(1 - (scrollY - fadeStart) / (fadeEnd - fadeStart));
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,46 +53,50 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
 
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
+      const width = window.innerWidth * 0.6;
+      const height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      ctx.fillRect(0, 0, width, height);
     };
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const neuronCount = 25;
+    const neuronCount = 20;
     const neurons: Neuron[] = [];
+    const canvasWidth = window.innerWidth * 0.6;
+    const canvasHeight = window.innerHeight;
     
     for (let i = 0; i < neuronCount; i++) {
       neurons.push({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 2 + 1,
-        hue: 180 + Math.random() * 60,
+        x: Math.random() * canvasWidth,
+        y: Math.random() * canvasHeight,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        radius: Math.random() * 2.5 + 1.5,
+        hue: 20 + Math.random() * 30,
         connections: [],
       });
     }
     neuronsRef.current = neurons;
 
-    const connectionDistance = 200;
+    const connectionDistance = 180;
 
     const animate = () => {
       if (!canvas || !ctx) return;
       
-      const width = window.innerWidth;
+      const width = window.innerWidth * 0.6;
       const height = window.innerHeight;
       
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
       ctx.fillRect(0, 0, width, height);
 
-      timeRef.current += 0.01;
+      timeRef.current += 0.008;
       const time = timeRef.current;
 
       neurons.forEach((neuron, i) => {
@@ -83,7 +109,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         neuron.x = Math.max(0, Math.min(width, neuron.x));
         neuron.y = Math.max(0, Math.min(height, neuron.y));
 
-        const hueShift = Math.sin(time + i * 0.5) * 30;
+        const hueShift = Math.sin(time + i * 0.3) * 15;
         const currentHue = neuron.hue + hueShift;
 
         neurons.forEach((other, j) => {
@@ -94,42 +120,43 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance < connectionDistance) {
-            const alpha = (1 - distance / connectionDistance) * 0.3;
+            const alpha = (1 - distance / connectionDistance) * 0.4;
             
             const gradient = ctx.createLinearGradient(
               neuron.x, neuron.y, other.x, other.y
             );
-            gradient.addColorStop(0, `hsla(${currentHue}, 70%, 50%, ${alpha})`);
-            gradient.addColorStop(0.5, `hsla(${(currentHue + 30) % 360}, 80%, 60%, ${alpha * 1.5})`);
-            gradient.addColorStop(1, `hsla(${other.hue + hueShift}, 70%, 50%, ${alpha})`);
+            gradient.addColorStop(0, `hsla(${currentHue}, 85%, 55%, ${alpha})`);
+            gradient.addColorStop(0.5, `hsla(${(currentHue + 10) % 360}, 90%, 65%, ${alpha * 1.3})`);
+            gradient.addColorStop(1, `hsla(${other.hue + hueShift}, 85%, 55%, ${alpha})`);
             
             ctx.beginPath();
             ctx.moveTo(neuron.x, neuron.y);
             ctx.lineTo(other.x, other.y);
             ctx.strokeStyle = gradient;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
           }
         });
 
-        const glowSize = neuron.radius + Math.sin(time * 2 + i) * 1;
+        const glowSize = neuron.radius + Math.sin(time * 2 + i) * 1.2;
         
         const glow = ctx.createRadialGradient(
           neuron.x, neuron.y, 0,
-          neuron.x, neuron.y, glowSize * 8
+          neuron.x, neuron.y, glowSize * 10
         );
-        glow.addColorStop(0, `hsla(${currentHue}, 80%, 60%, 0.8)`);
-        glow.addColorStop(0.3, `hsla(${currentHue}, 70%, 50%, 0.3)`);
-        glow.addColorStop(1, `hsla(${currentHue}, 60%, 40%, 0)`);
+        glow.addColorStop(0, `hsla(${currentHue}, 90%, 65%, 0.9)`);
+        glow.addColorStop(0.2, `hsla(${currentHue}, 85%, 55%, 0.4)`);
+        glow.addColorStop(0.5, `hsla(${currentHue}, 80%, 45%, 0.15)`);
+        glow.addColorStop(1, `hsla(${currentHue}, 70%, 40%, 0)`);
         
         ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize * 8, 0, Math.PI * 2);
+        ctx.arc(neuron.x, neuron.y, glowSize * 10, 0, Math.PI * 2);
         ctx.fillStyle = glow;
         ctx.fill();
 
         ctx.beginPath();
         ctx.arc(neuron.x, neuron.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${currentHue}, 80%, 70%, 0.9)`;
+        ctx.fillStyle = `hsla(${currentHue}, 90%, 75%, 0.95)`;
         ctx.fill();
       });
 
@@ -153,14 +180,50 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
     <section className="relative min-h-screen w-full overflow-hidden bg-black">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ opacity: 0.6 }}
+        className="absolute left-0 top-0 h-full"
+        style={{ 
+          opacity: 0.8,
+          width: '60%',
+        }}
       />
 
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black pointer-events-none" />
+      <div className="absolute right-0 top-0 w-1/2 h-full overflow-hidden">
+        <div 
+          className="absolute inset-0 z-10"
+          style={{
+            background: 'linear-gradient(to right, black 0%, transparent 30%), linear-gradient(to bottom, transparent 60%, black 100%)',
+          }}
+        />
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            filter: 'blur(2px) brightness(0.7)',
+            opacity: 0.6,
+          }}
+        >
+          <source src={relaxVideo} type="video/mp4" />
+        </video>
+      </div>
 
-      <div className="relative h-screen flex flex-col items-center justify-center px-6 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8">
+      <div 
+        className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black pointer-events-none z-20" 
+        style={{ opacity: 0.8 }}
+      />
+
+      <div 
+        className="relative z-30 h-screen flex flex-col items-center justify-center px-6 text-center"
+        style={{
+          opacity: scrollOpacity,
+          transform: `translateY(${(1 - scrollOpacity) * 30}px)`,
+          transition: 'opacity 0.1s ease-out, transform 0.1s ease-out',
+        }}
+      >
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 backdrop-blur-sm">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           <span className="text-sm text-white/70">Neural Therapy Technology</span>
         </div>
 
@@ -173,7 +236,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
 
         <p className="text-lg md:text-xl text-white/60 mb-12 max-w-2xl leading-relaxed">
           Advanced wearable therapy using precision vibrations to stimulate your nervous system. 
-          Place anywhere on your body for sleep, relaxation, or performance enhancement.
+          Experience deep relaxation, better sleep, and enhanced focus.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4">
@@ -188,7 +251,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           <Button
             size="lg"
             variant="outline"
-            className="px-8 py-6 text-lg rounded-full border-white/20 text-white bg-white/5 hover:bg-white/10"
+            className="px-8 py-6 text-lg rounded-full border-white/20 text-white bg-white/5 backdrop-blur-sm hover:bg-white/10"
             data-testid="button-learn-more"
           >
             Learn More
