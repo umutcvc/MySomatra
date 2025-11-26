@@ -65,18 +65,20 @@ export default function JournalWidget({ className }: JournalWidgetProps) {
   };
 
   return (
-    <Card className={className} data-testid="widget-journal">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base font-medium">Wellness Journal</CardTitle>
-        <BookOpen className="w-5 h-5 text-primary" />
+    <Card className={`${className} flex flex-col overflow-hidden`} data-testid="widget-journal">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 flex-shrink-0">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-primary" />
+          Wellness Journal
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="mb-4">
+      <CardContent className="flex-1 flex flex-col overflow-hidden">
+        <div className="mb-3 flex-shrink-0">
           <Textarea
             placeholder="How are you feeling? Log your wellness journey..."
             value={newEntry}
             onChange={(e) => setNewEntry(e.target.value)}
-            className="resize-none mb-2"
+            className="resize-none mb-2 text-sm"
             rows={2}
             data-testid="input-journal-entry"
           />
@@ -92,19 +94,23 @@ export default function JournalWidget({ className }: JournalWidgetProps) {
           </Button>
         </div>
 
-        <div className="space-y-3 max-h-64 overflow-y-auto">
+        <div className="flex-1 space-y-2 overflow-y-auto min-h-0">
           {isLoading ? (
-            <div className="text-center py-4 text-muted-foreground">Loading...</div>
+            <div className="text-center py-4 text-muted-foreground text-sm">Loading...</div>
           ) : entries.length === 0 ? (
-            <div className="text-center py-4 text-muted-foreground">No entries yet</div>
+            <div className="text-center py-8 text-muted-foreground">
+              <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No entries yet</p>
+              <p className="text-xs opacity-60">Start journaling above</p>
+            </div>
           ) : (
             entries.map((entry) => (
               <div
                 key={entry.id}
-                className="p-3 rounded-lg bg-muted/50 border-l-2 border-primary group"
+                className="p-3 rounded-lg bg-muted/30 border border-border/50 group"
                 data-testid={`entry-${entry.id}`}
               >
-                <p className="text-sm text-foreground mb-2">{entry.text}</p>
+                <p className="text-sm text-foreground mb-2 line-clamp-2">{entry.text}</p>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">{formatTime(entry.createdAt)}</span>
                   <div className="flex items-center gap-2">
@@ -112,7 +118,7 @@ export default function JournalWidget({ className }: JournalWidgetProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => deleteMutation.mutate(entry.id)}
                       data-testid={`button-delete-entry-${entry.id}`}
                     >

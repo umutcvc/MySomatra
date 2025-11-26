@@ -103,17 +103,19 @@ export default function TherapyWidget({ className }: TherapyWidgetProps) {
   const CurrentIcon = currentMode.icon;
 
   return (
-    <Card className={className} data-testid="widget-therapy">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base font-medium">Neural Therapy</CardTitle>
-        <Waves className="w-5 h-5 text-primary" />
+    <Card className={`${className} flex flex-col overflow-hidden`} data-testid="widget-therapy">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 flex-shrink-0">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <Waves className="w-5 h-5 text-primary" />
+          Neural Therapy
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="text-center mb-6">
-          <div className={`inline-flex p-4 rounded-full ${currentMode.color} mb-3 ${isPlaying ? 'animate-pulse' : ''}`}>
-            <CurrentIcon className="w-8 h-8 text-white" />
+      <CardContent className="flex-1 flex flex-col overflow-hidden">
+        <div className="text-center mb-4 flex-shrink-0">
+          <div className={`inline-flex p-3 rounded-full ${currentMode.color} mb-2 ${isPlaying ? 'animate-pulse' : ''}`}>
+            <CurrentIcon className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-lg font-medium text-foreground">{currentMode.name} Mode</h3>
+          <h3 className="text-base font-medium text-foreground">{currentMode.name} Mode</h3>
           <p className="text-sm text-muted-foreground">
             {isPlaying ? `Session: ${formatTime(elapsedTime)}` : 'Tap play to start'}
           </p>
@@ -122,22 +124,22 @@ export default function TherapyWidget({ className }: TherapyWidgetProps) {
           )}
         </div>
 
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-4 flex-shrink-0">
           <Button
             size="lg"
-            className={`w-16 h-16 rounded-full ${isPlaying ? 'bg-destructive hover:bg-destructive/90' : ''}`}
+            className={`w-14 h-14 rounded-full ${isPlaying ? 'bg-destructive hover:bg-destructive/90' : ''}`}
             onClick={handlePlayPause}
             data-testid="button-play-pause"
           >
             {isPlaying ? (
-              <Pause className="w-8 h-8" />
+              <Pause className="w-6 h-6" />
             ) : (
-              <Play className="w-8 h-8 ml-1" />
+              <Play className="w-6 h-6 ml-0.5" />
             )}
           </Button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Intensity</span>
             <span className="text-sm font-medium text-foreground">{intensity[0]}%</span>
@@ -151,7 +153,7 @@ export default function TherapyWidget({ className }: TherapyWidgetProps) {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-1 flex-shrink-0 mt-auto">
           {modes.map((mode) => {
             const Icon = mode.icon;
             return (
@@ -159,12 +161,12 @@ export default function TherapyWidget({ className }: TherapyWidgetProps) {
                 key={mode.id}
                 variant={activeMode === mode.id ? "default" : "outline"}
                 size="sm"
-                className="flex-col h-auto py-2 gap-1"
+                className="flex-col h-auto py-1 px-0.5 gap-0 min-w-0"
                 onClick={() => handleModeChange(mode.id)}
                 data-testid={`button-mode-${mode.id}`}
               >
-                <Icon className="w-4 h-4" />
-                <span className="text-xs">{mode.name}</span>
+                <Icon className="w-3 h-3" />
+                <span className="text-[9px] leading-tight truncate w-full text-center">{mode.name}</span>
               </Button>
             );
           })}

@@ -100,42 +100,42 @@ export default function Connect() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {isConnected && device ? (
-          <div className="space-y-6">
-            <div className="grid lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-1 h-[420px]">
+          <div className="space-y-4">
+            <div className="grid lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-1">
                 <ConnectionStatus
                   deviceName={device.name}
                   batteryLevel={batteryLevel || 0}
                   signalStrength={85}
                   lastSync="Just now"
-                  className="h-full"
+                  className="h-[380px]"
                 />
               </div>
 
-              <div className="lg:col-span-1 h-[420px]">
-                <TherapyWidget className="h-full" />
+              <div className="lg:col-span-1">
+                <TherapyWidget className="h-[380px]" />
               </div>
 
-              <div className="lg:col-span-2 h-[420px]">
-                <IMUPlotWidget className="h-full" />
+              <div className="lg:col-span-2">
+                <IMUPlotWidget className="h-[380px]" />
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 h-[400px]">
-                <ActivityWidget className="h-full" />
+            <div className="grid lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-1">
+                <ActivityWidget className="h-[360px]" />
               </div>
-              <div className="lg:col-span-1 h-[400px]">
-                <CalendarWidget className="h-full" />
+              <div className="lg:col-span-1">
+                <CalendarWidget className="h-[360px]" />
               </div>
-              <div className="lg:col-span-1 h-[400px]">
-                <TasksWidget className="h-full" />
+              <div className="lg:col-span-1">
+                <TasksWidget className="h-[360px]" />
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6">
-              <MapWidget />
-              <JournalWidget />
+            <div className="grid lg:grid-cols-2 gap-4">
+              <MapWidget className="h-[380px]" />
+              <JournalWidget className="h-[380px]" />
             </div>
             
             <div className="flex justify-center pt-4">

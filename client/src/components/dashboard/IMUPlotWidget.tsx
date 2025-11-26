@@ -207,31 +207,27 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   const currentPitch = pitchData?.pitch ?? 0;
 
   return (
-    <Card className={className} data-testid="widget-imu-plot">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base font-medium">IMU Pitch Angle</CardTitle>
-        <Activity className="w-5 h-5 text-primary" />
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-muted'}`} />
-            <span className="text-sm text-muted-foreground">
-              {isConnected ? 'Live' : 'Not connected'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold font-mono text-foreground">
-              {currentPitch.toFixed(1)}°
-            </span>
-          </div>
+    <Card className={`${className} flex flex-col overflow-hidden`} data-testid="widget-imu-plot">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 flex-shrink-0">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <Activity className="w-5 h-5 text-primary" />
+          IMU Pitch Angle
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-muted'}`} />
+          <span className="text-sm text-muted-foreground">
+            {isConnected ? 'Live' : 'Offline'}
+          </span>
+          <span className="text-xl font-bold font-mono text-foreground">
+            {currentPitch.toFixed(1)}°
+          </span>
         </div>
-
-        <div ref={containerRef} className="relative rounded-lg overflow-hidden border border-border">
+      </CardHeader>
+      <CardContent className="flex-1 flex flex-col overflow-hidden">
+        <div ref={containerRef} className="relative rounded-lg overflow-hidden border border-border flex-1 min-h-0">
           <canvas 
             ref={canvasRef}
-            className="w-full"
-            style={{ height: '180px' }}
+            className="w-full h-full"
             data-testid="canvas-pitch-plot"
           />
           
@@ -239,13 +235,13 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
               <div className="text-center">
                 <Crosshair className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Connect device to see live data</p>
+                <p className="text-sm text-muted-foreground">Connect device for live data</p>
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center justify-between mt-3 flex-shrink-0">
           <div className="text-xs text-muted-foreground">
             {pitchHistory.length} samples
           </div>
@@ -258,12 +254,12 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
             className={isCalibrating ? 'animate-pulse' : ''}
           >
             <RotateCcw className={`w-4 h-4 mr-1 ${isCalibrating ? 'animate-spin' : ''}`} />
-            {isCalibrating ? `Calibrating... ${countdown}s` : 'Calibrate Zero'}
+            {isCalibrating ? `${countdown}s...` : 'Calibrate Zero'}
           </Button>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <div className="p-2 rounded-lg bg-muted/50">
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center flex-shrink-0">
+          <div className="p-2 rounded-lg bg-muted/30">
             <div className="text-xs text-muted-foreground">Min</div>
             <div className="text-sm font-medium font-mono text-foreground">
               {pitchHistory.length > 0 
@@ -271,13 +267,13 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
                 : '--'}
             </div>
           </div>
-          <div className="p-2 rounded-lg bg-muted/50">
+          <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
             <div className="text-xs text-muted-foreground">Current</div>
-            <div className="text-sm font-medium font-mono text-foreground">
+            <div className="text-sm font-medium font-mono text-primary">
               {currentPitch.toFixed(1)}°
             </div>
           </div>
-          <div className="p-2 rounded-lg bg-muted/50">
+          <div className="p-2 rounded-lg bg-muted/30">
             <div className="text-xs text-muted-foreground">Max</div>
             <div className="text-sm font-medium font-mono text-foreground">
               {pitchHistory.length > 0 

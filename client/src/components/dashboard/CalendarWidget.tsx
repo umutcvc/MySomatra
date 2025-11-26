@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -10,11 +10,8 @@ interface CalendarWidgetProps {
 export default function CalendarWidget({ className }: CalendarWidgetProps) {
   const [currentDate] = useState(new Date());
   
-  // todo: remove mock functionality
   const [events] = useState([
     { id: 1, title: "Morning Meditation", time: "7:00 AM", type: "meditate" },
-    { id: 2, title: "Focus Session", time: "10:00 AM", type: "focus" },
-    { id: 3, title: "Evening Relaxation", time: "8:00 PM", type: "relax" },
   ]);
 
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -46,9 +43,12 @@ export default function CalendarWidget({ className }: CalendarWidgetProps) {
   };
 
   return (
-    <Card className={className} data-testid="widget-calendar">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base font-medium">Calendar</CardTitle>
+    <Card className={`${className} flex flex-col overflow-hidden`} data-testid="widget-calendar">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 flex-shrink-0">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-primary" />
+          Calendar
+        </CardTitle>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" data-testid="button-prev-month">
             <ChevronLeft className="w-4 h-4" />
@@ -61,8 +61,8 @@ export default function CalendarWidget({ className }: CalendarWidgetProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-7 gap-1 mb-4">
+      <CardContent className="flex-1 flex flex-col overflow-hidden">
+        <div className="grid grid-cols-7 gap-1 mb-3 flex-shrink-0">
           {days.map((day) => (
             <div key={day} className="text-center text-xs text-muted-foreground py-1">
               {day}
@@ -71,7 +71,7 @@ export default function CalendarWidget({ className }: CalendarWidgetProps) {
           {getDaysInMonth().map((day, index) => (
             <div
               key={index}
-              className={`text-center py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
+              className={`text-center py-1 text-sm rounded-md cursor-pointer transition-colors ${
                 day === today
                   ? 'bg-primary text-primary-foreground font-medium'
                   : day
@@ -85,18 +85,21 @@ export default function CalendarWidget({ className }: CalendarWidgetProps) {
           ))}
         </div>
 
-        <div className="border-t border-border pt-4">
-          <h4 className="text-sm font-medium text-foreground mb-3">Today's Schedule</h4>
+        <div className="border-t border-border pt-3 flex-1 overflow-y-auto min-h-0">
+          <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            Today's Schedule
+          </h4>
           <div className="space-y-2">
             {events.map((event) => (
               <div
                 key={event.id}
-                className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
+                className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border/50"
                 data-testid={`event-${event.id}`}
               >
-                <div className={`w-2 h-2 rounded-full ${getTypeColor(event.type)}`} />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-foreground">{event.title}</div>
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getTypeColor(event.type)}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{event.title}</div>
                   <div className="text-xs text-muted-foreground">{event.time}</div>
                 </div>
               </div>
