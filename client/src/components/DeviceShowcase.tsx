@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Brain, Zap, Activity, MapPin, Moon, Sparkles, Heart, Wind } from "lucide-react";
 import { useState } from "react";
-import deviceImage from "@assets/generated_images/device_product_transparent_bg.png";
+import deviceImage from "@assets/generated_images/sleek_neural_therapy_wearable_device.png";
 
 const modes = [
   {
@@ -82,9 +82,9 @@ export default function DeviceShowcase({ selectedMode, onModeSelect }: DeviceSho
           <div className="relative">
             <div 
               className="relative rounded-3xl p-8 overflow-hidden"
-              style={{ backgroundColor: '#1a1f2e' }}
+              style={{ backgroundColor: '#000000' }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
               <img
                 src={deviceImage}
                 alt="MySomatra Neural Therapy Device"

@@ -8,7 +8,9 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 
 - **Theme**: Always dark mode (no light mode toggle)
 - **Design**: Minimalist Apple-style with black backgrounds
+- **Color Scheme**: Pastel orange primary color (HSL 25, 85%, 58%)
 - **Hero Section**: Animated neural network visualization with color-shifting gradients
+- **Device Image**: Sleek futuristic wearable with matte black/rose gold finish on pure black background
 - **Communication style**: Simple, everyday language
 
 ## System Architecture
