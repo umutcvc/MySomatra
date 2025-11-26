@@ -10,7 +10,7 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 - **Design**: Minimalist Apple-style with black backgrounds
 - **Color Scheme**: Pastel orange primary color (HSL 25, 85%, 58%)
 - **Hero Section**: Animated neural network visualization with color-shifting gradients
-- **Device Image**: Sleek futuristic wearable with matte black/rose gold finish on pure black background
+- **Device Image**: Sleek futuristic wearable with matte black body, orange LED edge glow on pure black background (mysomatra_device_orange_glow.png)
 - **Communication style**: Simple, everyday language
 
 ## System Architecture
@@ -93,10 +93,13 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 
 **GPS Functionality**: Integrated into the device hardware, tracked via device connections and activity logs. Uses GPS data for outdoor activity mapping and location tracking.
 
+**Map Integration**: React-Leaflet v4.2.1 with OpenStreetMap (free, no API key required). MapWidget component uses CartoDB dark tiles that match the app's dark theme, with orange markers and polyline paths matching the brand color. Leaflet CSS is imported directly in the component.
+
 **Third-Party Services**:
 - Neon Database - Serverless PostgreSQL hosting
 - Google Fonts - Inter font family for typography
 - Radix UI - Accessible component primitives
+- Leaflet/OpenStreetMap - Free map tiles for GPS tracking
 
 **Build Tools**:
 - Vite - Frontend build tool and dev server
