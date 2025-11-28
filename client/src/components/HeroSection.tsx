@@ -202,16 +202,23 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         ref={canvasRef}
         className="absolute left-0 top-0 h-full"
         style={{ 
-          opacity: 0.8,
-          width: '60%',
+          opacity: 0.85,
+          width: '55%',
         }}
       />
 
-      <div className="absolute right-0 top-0 w-1/2 h-full overflow-hidden">
+      <div 
+        className="absolute left-[40%] top-0 w-[25%] h-full z-[5] pointer-events-none"
+        style={{
+          background: 'linear-gradient(to right, black 0%, transparent 50%, transparent 100%)',
+        }}
+      />
+
+      <div className="absolute right-0 top-0 w-[55%] h-full overflow-hidden">
         <div 
-          className="absolute inset-0 z-10"
+          className="absolute inset-0 z-10 pointer-events-none"
           style={{
-            background: 'linear-gradient(to right, black 0%, transparent 40%), linear-gradient(to bottom, transparent 70%, black 100%)',
+            background: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.7) 15%, rgba(0,0,0,0.3) 35%, transparent 60%), linear-gradient(to bottom, transparent 75%, black 100%)',
           }}
         />
         <video
@@ -221,8 +228,8 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: 'blur(1px) brightness(0.85)',
-            opacity: 0.75,
+            filter: 'blur(0.5px) brightness(0.9)',
+            opacity: 0.8,
           }}
         >
           <source src={relaxVideo} type="video/mp4" />
