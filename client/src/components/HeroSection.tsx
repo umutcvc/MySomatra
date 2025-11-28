@@ -62,7 +62,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         y: (window.innerHeight / (lineCount + 1)) * (i + 1),
         speed: 0.5 + Math.random() * 0.5,
         phase: Math.random() * Math.PI * 2,
-        thickness: 1 + Math.random() * 2,
+        thickness: 1.5 + Math.random() * 2.5,
       });
     }
 
@@ -93,8 +93,11 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         
-        for (let x = 0; x <= width; x += 20) {
-          const waveY = y + Math.sin(x * 0.01 + time * 2 + line.phase) * 2;
+        for (let x = 0; x <= width; x += 8) {
+          const wave1 = Math.sin(x * 0.015 + time * 2 + line.phase) * 8;
+          const wave2 = Math.sin(x * 0.008 + time * 1.5 - line.phase) * 5;
+          const wave3 = Math.sin(x * 0.025 + time * 3 + i) * 3;
+          const waveY = y + wave1 + wave2 + wave3;
           ctx.lineTo(x, waveY);
         }
         
@@ -102,13 +105,13 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         ctx.lineWidth = line.thickness;
         ctx.stroke();
         
-        const glowGradient = ctx.createLinearGradient(0, y - 20, 0, y + 20);
+        const glowGradient = ctx.createLinearGradient(0, y - 30, 0, y + 30);
         glowGradient.addColorStop(0, `hsla(25, 85%, 58%, 0)`);
-        glowGradient.addColorStop(0.5, `hsla(25, 85%, 58%, ${pulse * 0.1})`);
+        glowGradient.addColorStop(0.5, `hsla(25, 85%, 58%, ${pulse * 0.15})`);
         glowGradient.addColorStop(1, `hsla(25, 85%, 58%, 0)`);
         
         ctx.fillStyle = glowGradient;
-        ctx.fillRect(0, y - 20, width, 40);
+        ctx.fillRect(0, y - 30, width, 60);
       });
 
       animationRef.current = requestAnimationFrame(animate);
