@@ -79,36 +79,15 @@ export default function Home() {
         <CTASection onConnectClick={handleConnectClick} />
       </main>
 
-      <footer className="bg-black text-white py-12 px-6 border-t border-white/5">
+      <footer className="bg-black text-white py-8 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-12 mb-12">
-            <div className="md:col-span-2">
-              <div className="text-2xl font-semibold mb-4">
-                My<span className="text-primary">Somatra</span>
-              </div>
-              <p className="text-white/40 max-w-md">
-                Advanced neural therapy wearable technology designed to restore balance, enhance performance, and promote wellness.
-              </p>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-2xl font-semibold">
+              My<span className="text-primary">Somatra</span>
             </div>
-            <div>
-              <h4 className="font-medium mb-4">Product</h4>
-              <ul className="space-y-2 text-white/40">
-                <li><a href="#" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Technology</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Specifications</a></li>
-              </ul>
+            <div className="text-white/30 text-sm">
+              2024 MySomatra. All rights reserved.
             </div>
-            <div>
-              <h4 className="font-medium mb-4">Support</h4>
-              <ul className="space-y-2 text-white/40">
-                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Firmware</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-white/5 pt-8 text-center text-white/30 text-sm">
-            2024 MySomatra. All rights reserved.
           </div>
         </div>
       </footer>

@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Brain, Zap, Activity, MapPin, Moon, Sparkles, Heart, Wind } from "lucide-react";
 import { useState } from "react";
 import { ScrollFade } from "@/components/ScrollFade";
-import deviceImage from "@assets/generated_images/mysomatra_device_orange_glow.png";
+import deviceImage from "@assets/generated_images/3d_mysomatra_device_circular_design.png";
 
 const modes = [
   {

@@ -67,7 +67,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const neuronCount = 20;
+    const neuronCount = 35;
     const neurons: Neuron[] = [];
     const canvasWidth = window.innerWidth * 0.6;
     const canvasHeight = window.innerHeight;
@@ -76,16 +76,16 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
       neurons.push({
         x: Math.random() * canvasWidth,
         y: Math.random() * canvasHeight,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        radius: Math.random() * 2.5 + 1.5,
-        hue: 20 + Math.random() * 30,
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: (Math.random() - 0.5) * 0.25,
+        radius: Math.random() * 3 + 2,
+        hue: 15 + Math.random() * 25,
         connections: [],
       });
     }
     neuronsRef.current = neurons;
 
-    const connectionDistance = 180;
+    const connectionDistance = 220;
 
     const animate = () => {
       if (!canvas || !ctx) return;
@@ -93,15 +93,15 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
       const width = window.innerWidth * 0.6;
       const height = window.innerHeight;
       
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
       ctx.fillRect(0, 0, width, height);
 
-      timeRef.current += 0.008;
+      timeRef.current += 0.006;
       const time = timeRef.current;
 
       neurons.forEach((neuron, i) => {
-        neuron.x += neuron.vx;
-        neuron.y += neuron.vy;
+        neuron.x += neuron.vx + Math.sin(time * 0.5 + i) * 0.1;
+        neuron.y += neuron.vy + Math.cos(time * 0.5 + i) * 0.1;
 
         if (neuron.x < 0 || neuron.x > width) neuron.vx *= -1;
         if (neuron.y < 0 || neuron.y > height) neuron.vy *= -1;
@@ -109,7 +109,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         neuron.x = Math.max(0, Math.min(width, neuron.x));
         neuron.y = Math.max(0, Math.min(height, neuron.y));
 
-        const hueShift = Math.sin(time + i * 0.3) * 15;
+        const hueShift = Math.sin(time + i * 0.2) * 10;
         const currentHue = neuron.hue + hueShift;
 
         neurons.forEach((other, j) => {
@@ -120,43 +120,63 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance < connectionDistance) {
-            const alpha = (1 - distance / connectionDistance) * 0.4;
+            const alpha = Math.pow(1 - distance / connectionDistance, 1.5) * 0.5;
+            const pulse = 0.8 + Math.sin(time * 3 + (i + j) * 0.1) * 0.2;
             
             const gradient = ctx.createLinearGradient(
               neuron.x, neuron.y, other.x, other.y
             );
-            gradient.addColorStop(0, `hsla(${currentHue}, 85%, 55%, ${alpha})`);
-            gradient.addColorStop(0.5, `hsla(${(currentHue + 10) % 360}, 90%, 65%, ${alpha * 1.3})`);
-            gradient.addColorStop(1, `hsla(${other.hue + hueShift}, 85%, 55%, ${alpha})`);
+            gradient.addColorStop(0, `hsla(${currentHue}, 80%, 60%, ${alpha * pulse})`);
+            gradient.addColorStop(0.5, `hsla(${(currentHue + 8) % 360}, 85%, 70%, ${alpha * pulse * 1.2})`);
+            gradient.addColorStop(1, `hsla(${other.hue + hueShift}, 80%, 60%, ${alpha * pulse})`);
             
             ctx.beginPath();
             ctx.moveTo(neuron.x, neuron.y);
-            ctx.lineTo(other.x, other.y);
+            
+            const midX = (neuron.x + other.x) / 2 + Math.sin(time * 2 + i) * 5;
+            const midY = (neuron.y + other.y) / 2 + Math.cos(time * 2 + j) * 5;
+            ctx.quadraticCurveTo(midX, midY, other.x, other.y);
+            
             ctx.strokeStyle = gradient;
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1.2 + alpha;
             ctx.stroke();
           }
         });
 
-        const glowSize = neuron.radius + Math.sin(time * 2 + i) * 1.2;
+        const glowSize = neuron.radius + Math.sin(time * 1.5 + i) * 1.5;
+        const pulseIntensity = 0.7 + Math.sin(time * 2.5 + i * 0.5) * 0.3;
         
-        const glow = ctx.createRadialGradient(
+        const outerGlow = ctx.createRadialGradient(
           neuron.x, neuron.y, 0,
-          neuron.x, neuron.y, glowSize * 10
+          neuron.x, neuron.y, glowSize * 15
         );
-        glow.addColorStop(0, `hsla(${currentHue}, 90%, 65%, 0.9)`);
-        glow.addColorStop(0.2, `hsla(${currentHue}, 85%, 55%, 0.4)`);
-        glow.addColorStop(0.5, `hsla(${currentHue}, 80%, 45%, 0.15)`);
-        glow.addColorStop(1, `hsla(${currentHue}, 70%, 40%, 0)`);
+        outerGlow.addColorStop(0, `hsla(${currentHue}, 85%, 70%, ${0.8 * pulseIntensity})`);
+        outerGlow.addColorStop(0.15, `hsla(${currentHue}, 80%, 60%, ${0.35 * pulseIntensity})`);
+        outerGlow.addColorStop(0.4, `hsla(${currentHue}, 75%, 50%, ${0.12 * pulseIntensity})`);
+        outerGlow.addColorStop(0.7, `hsla(${currentHue}, 70%, 45%, ${0.04 * pulseIntensity})`);
+        outerGlow.addColorStop(1, `hsla(${currentHue}, 65%, 40%, 0)`);
         
         ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize * 10, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
+        ctx.arc(neuron.x, neuron.y, glowSize * 15, 0, Math.PI * 2);
+        ctx.fillStyle = outerGlow;
+        ctx.fill();
+
+        const coreGlow = ctx.createRadialGradient(
+          neuron.x, neuron.y, 0,
+          neuron.x, neuron.y, glowSize * 2
+        );
+        coreGlow.addColorStop(0, `hsla(${currentHue}, 95%, 90%, 1)`);
+        coreGlow.addColorStop(0.4, `hsla(${currentHue}, 90%, 75%, 0.9)`);
+        coreGlow.addColorStop(1, `hsla(${currentHue}, 85%, 65%, 0)`);
+        
+        ctx.beginPath();
+        ctx.arc(neuron.x, neuron.y, glowSize * 2, 0, Math.PI * 2);
+        ctx.fillStyle = coreGlow;
         ctx.fill();
 
         ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${currentHue}, 90%, 75%, 0.95)`;
+        ctx.arc(neuron.x, neuron.y, glowSize * 0.6, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${currentHue}, 100%, 95%, 1)`;
         ctx.fill();
       });
 
@@ -191,7 +211,7 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         <div 
           className="absolute inset-0 z-10"
           style={{
-            background: 'linear-gradient(to right, black 0%, transparent 30%), linear-gradient(to bottom, transparent 60%, black 100%)',
+            background: 'linear-gradient(to right, black 0%, transparent 40%), linear-gradient(to bottom, transparent 70%, black 100%)',
           }}
         />
         <video
@@ -201,8 +221,8 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: 'blur(2px) brightness(0.7)',
-            opacity: 0.6,
+            filter: 'blur(1px) brightness(0.85)',
+            opacity: 0.75,
           }}
         >
           <source src={relaxVideo} type="video/mp4" />
