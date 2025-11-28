@@ -25,7 +25,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
   const [isTraining, setIsTraining] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
-  const [collectedActivities, setCollectedActivities] = useState<{ activity: ActivityType; sampleCount: number; index: number }[]>([]);
+  const [collectedActivities, setCollectedActivities] = useState<{ activity: ActivityType; sampleCount: number; index: number; quality: string; windowCount: number }[]>([]);
   const [isModelTrained, setIsModelTrained] = useState(false);
   
   // Collection state
@@ -118,7 +118,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
     setIsCollecting(true);
     setCollectingActivity(activity);
     setCollectionProgress(0);
-    setCollectionRemaining(20);
+    setCollectionRemaining(10);
     lastPitchRef.current = null;
 
     activityTrainingService.startCollection(
@@ -152,7 +152,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
 
     toast({
       title: `Recording ${ACTIVITIES.find(a => a.id === activity)?.label}`,
-      description: "Keep performing the activity for 20 seconds...",
+      description: "Keep performing the activity for 10 seconds...",
     });
   }, [isConnected, isStreaming, isCollecting, toast, refreshCollectedActivities]);
 
@@ -322,7 +322,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
       {!isClassifying && !isCollecting && (
         <div className="space-y-3">
           <div className="text-sm text-muted-foreground">
-            Record 20s of each activity while streaming:
+            Record 10s of each activity while streaming:
           </div>
           <div className="grid grid-cols-2 gap-2">
             {ACTIVITIES.map((activity) => {
@@ -365,9 +365,10 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
                 Recordings ({collectedActivities.length}):
               </div>
               <div className="space-y-1 max-h-32 overflow-y-auto">
-                {collectedActivities.map(({ activity, sampleCount, index }) => {
+                {collectedActivities.map(({ activity, windowCount, quality, index }) => {
                   const activityInfo = ACTIVITIES.find(a => a.id === activity);
                   const Icon = activityInfo?.icon || Activity;
+                  const qualityColor = quality === 'good' ? 'text-emerald-500' : quality === 'fair' ? 'text-amber-500' : 'text-red-500';
                   return (
                     <div 
                       key={index}
@@ -379,7 +380,8 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
                           style={{ color: activityInfo?.color }}
                         />
                         <span className="text-xs text-foreground capitalize">{activity}</span>
-                        <span className="text-xs text-muted-foreground">({sampleCount} samples)</span>
+                        <span className="text-xs text-muted-foreground">({windowCount} windows)</span>
+                        <span className={`text-xs ${qualityColor}`}>{quality}</span>
                       </div>
                       <Button
                         variant="ghost"

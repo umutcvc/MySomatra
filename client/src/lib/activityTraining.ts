@@ -12,6 +12,8 @@ interface ActivitySample {
   timestamps: number[];
   pitches: number[];
   collectedAt: number;
+  quality: 'good' | 'fair' | 'poor';
+  windowCount: number;
 }
 
 export interface ClassificationResult {
@@ -24,17 +26,26 @@ export interface ClassificationResult {
   timestamp: number;
 }
 
-// Configuration matching the reference implementation EXACTLY
-const TRAIN_SEC = 10;          // 10 seconds collection per activity (user stops moving after ~10s)
-const WIN_SEC = 3.0;           // 3-second sliding window for features
-const HOP_SEC = 0.2;           // 0.2-second hop between windows (reference uses 0.2)
-const NUM_FEATURES = 4;        // vel_rms, pitch_sd, jerk_rms, zcr
-const CLASSIFICATION_INTERVAL_MS = 200; // Reference uses 200ms
+export interface DataQuality {
+  sampleCount: number;
+  duration: number;
+  sampleRate: number;
+  motionRange: number;
+  quality: 'good' | 'fair' | 'poor';
+  message: string;
+}
 
-// Temporal smoothing parameters (matching reference)
-const ALPHA_EMA = 0.15;        // EMA smoothing factor
-const DWELL_MS = 100;          // Hold time before switching class
-const SWITCH_MARGIN = 0.06;    // New class must beat old by 6%
+// Configuration
+const TRAIN_SEC = 10;          // 10 seconds collection per activity
+const WIN_SEC = 3.0;           // 3-second sliding window for features
+const HOP_SEC = 0.2;           // 0.2-second hop between windows
+const NUM_FEATURES = 6;        // vel_rms, pitch_sd, jerk_rms, zcr, peak_to_peak, mean_pitch
+const CLASSIFICATION_INTERVAL_MS = 200;
+
+// Temporal smoothing parameters
+const ALPHA_EMA = 0.15;
+const DWELL_MS = 100;
+const SWITCH_MARGIN = 0.06;
 
 const ACTIVITIES: ActivityType[] = ['still', 'walking', 'running', 'stairs'];
 
@@ -43,6 +54,7 @@ class ActivityTrainingService {
   private collectedData: ActivitySample[] = [];
   private normMean: number[] | null = null;
   private normStd: number[] | null = null;
+  private baselinePitch: number = 0;
   
   // Temporal smoothing state
   private probEMA: number[] = new Array(ACTIVITIES.length).fill(0);
@@ -79,11 +91,18 @@ class ActivityTrainingService {
     return { progress, remaining, activity: this.collectionActivity };
   }
 
-  // Start collecting data for an activity (20 seconds)
+  // Calibrate baseline from resting position
+  calibrateBaseline(pitchHistory: PitchData[]): void {
+    if (pitchHistory.length > 0) {
+      const recent = pitchHistory.slice(-50);
+      this.baselinePitch = recent.reduce((s, p) => s + p.pitch, 0) / recent.length;
+    }
+  }
+
   startCollection(
     activity: ActivityType, 
     onProgress: (progress: number, remaining: number) => void,
-    onComplete: (success: boolean, message: string) => void
+    onComplete: (success: boolean, message: string, quality?: DataQuality) => void
   ): void {
     if (this.isCollecting) {
       onComplete(false, 'Already collecting data');
@@ -97,31 +116,27 @@ class ActivityTrainingService {
     this.collectionPitches = [];
     this.collectionCallback = onProgress;
 
-    // Set timer for collection end
     setTimeout(() => {
       this.finishCollection(onComplete);
     }, TRAIN_SEC * 1000);
   }
 
-  // Feed pitch data during collection
   feedPitchData(pitch: number, timestamp: number): void {
     if (!this.isCollecting) return;
     
     if (pitch !== undefined && !isNaN(pitch)) {
-      // Store timestamps in seconds (relative to collection start)
       const relativeTime = (timestamp - this.collectionStartTime) / 1000;
       this.collectionTimestamps.push(relativeTime);
-      this.collectionPitches.push(pitch);
+      // Remove baseline drift
+      this.collectionPitches.push(pitch - this.baselinePitch);
     }
 
-    // Update progress
     if (this.collectionCallback) {
       const { progress, remaining } = this.getCollectionProgress();
       this.collectionCallback(progress, remaining);
     }
   }
 
-  // Cancel ongoing collection
   cancelCollection(): void {
     this.isCollecting = false;
     this.collectionActivity = null;
@@ -130,7 +145,39 @@ class ActivityTrainingService {
     this.collectionCallback = null;
   }
 
-  private finishCollection(onComplete: (success: boolean, message: string) => void): void {
+  private assessDataQuality(timestamps: number[], pitches: number[]): DataQuality {
+    const n = timestamps.length;
+    const duration = n > 0 ? timestamps[n - 1] - timestamps[0] : 0;
+    const sampleRate = duration > 0 ? n / duration : 0;
+    
+    // Calculate motion range (peak-to-peak)
+    const minP = Math.min(...pitches);
+    const maxP = Math.max(...pitches);
+    const motionRange = maxP - minP;
+    
+    let quality: 'good' | 'fair' | 'poor' = 'good';
+    let message = '';
+
+    if (n < 100) {
+      quality = 'poor';
+      message = 'Not enough samples. Check device connection.';
+    } else if (sampleRate < 20) {
+      quality = 'poor';
+      message = 'Sample rate too low. Move device closer.';
+    } else if (duration < WIN_SEC + 1) {
+      quality = 'poor';
+      message = 'Recording too short.';
+    } else if (sampleRate < 50) {
+      quality = 'fair';
+      message = 'Sample rate is low but usable.';
+    } else {
+      message = 'Good quality data captured!';
+    }
+
+    return { sampleCount: n, duration, sampleRate, motionRange, quality, message };
+  }
+
+  private finishCollection(onComplete: (success: boolean, message: string, quality?: DataQuality) => void): void {
     if (!this.isCollecting || !this.collectionActivity) {
       onComplete(false, 'No active collection');
       return;
@@ -140,35 +187,41 @@ class ActivityTrainingService {
     const timestamps = [...this.collectionTimestamps];
     const pitches = [...this.collectionPitches];
 
-    // Reset collection state
     this.isCollecting = false;
     this.collectionActivity = null;
     this.collectionTimestamps = [];
     this.collectionPitches = [];
     this.collectionCallback = null;
 
-    // Validate collected data
-    if (timestamps.length < 50) {
-      onComplete(false, `Not enough data collected (${timestamps.length} samples). Make sure device is streaming.`);
+    const quality = this.assessDataQuality(timestamps, pitches);
+
+    if (quality.quality === 'poor') {
+      onComplete(false, quality.message, quality);
       return;
     }
 
-    // Check if we have enough time span
-    const duration = timestamps[timestamps.length - 1] - timestamps[0];
-    if (duration < WIN_SEC) {
-      onComplete(false, `Data duration too short (${duration.toFixed(1)}s). Need at least ${WIN_SEC}s.`);
+    // Count windows we can extract
+    const windows = this.makeWindows(timestamps, pitches);
+    
+    if (windows.length < 5) {
+      onComplete(false, `Not enough motion data. Only ${windows.length} windows extracted.`, quality);
       return;
     }
 
-    // Store the collected data
     this.collectedData.push({
       activity,
       timestamps,
       pitches,
       collectedAt: Date.now(),
+      quality: quality.quality,
+      windowCount: windows.length,
     });
 
-    onComplete(true, `Captured ${timestamps.length} samples (${duration.toFixed(1)}s) for ${activity}`);
+    onComplete(
+      true, 
+      `Captured ${activity}: ${windows.length} training windows (${quality.quality} quality)`,
+      quality
+    );
   }
 
   deleteActivity(index: number): void {
@@ -177,11 +230,13 @@ class ActivityTrainingService {
     }
   }
 
-  getCollectedActivities(): { activity: ActivityType; sampleCount: number; index: number }[] {
+  getCollectedActivities(): { activity: ActivityType; sampleCount: number; index: number; quality: string; windowCount: number }[] {
     return this.collectedData.map((data, index) => ({
       activity: data.activity,
       sampleCount: data.pitches.length,
       index,
+      quality: data.quality,
+      windowCount: data.windowCount,
     }));
   }
 
@@ -193,13 +248,12 @@ class ActivityTrainingService {
     this.probEMA = new Array(ACTIVITIES.length).fill(0);
   }
 
-  // Extract 4 physics-based features from a window of pitch data
-  // Matches reference: _featuresFromPitch(ts, p)
+  // Extract 6 features from a window of pitch data
   private extractFeatures(timestamps: number[], pitches: number[]): number[] | null {
     const n = pitches.length;
     if (n < 4) return null;
 
-    // Calculate velocity (first derivative of pitch)
+    // Calculate velocity (first derivative)
     const vel: number[] = [];
     for (let i = 1; i < n; i++) {
       const dt = timestamps[i] - timestamps[i - 1];
@@ -208,18 +262,18 @@ class ActivityTrainingService {
       }
     }
 
-    // Calculate jerk (second derivative) - from velocity
+    // Calculate jerk (second derivative)
     const jerk: number[] = [];
     if (vel.length > 1) {
       for (let i = 1; i < vel.length; i++) {
-        const dt = timestamps[i] - timestamps[i - 1]; // Use original timestamps
+        const dt = timestamps[i] - timestamps[i - 1];
         if (dt > 0) {
           jerk.push((vel[i] - vel[i - 1]) / dt);
         }
       }
     }
 
-    // Zero crossing rate on signed delta pitch (matching reference)
+    // Zero crossing rate
     let zc = 0;
     for (let i = 2; i < n; i++) {
       const a = pitches[i] - pitches[i - 1];
@@ -229,31 +283,38 @@ class ActivityTrainingService {
     }
     const duration = Math.max(0.001, timestamps[n - 1] - timestamps[0]);
 
-    // Calculate RMS and stats (matching reference)
+    // Feature 1: Velocity RMS
     const velRms = vel.length > 0 
       ? Math.sqrt(vel.reduce((s, x) => s + x * x, 0) / vel.length) 
       : 0;
     
+    // Feature 2: Pitch standard deviation
     const meanP = pitches.reduce((s, x) => s + x, 0) / n;
     const pitchSd = Math.sqrt(pitches.reduce((s, x) => s + (x - meanP) ** 2, 0) / n);
     
+    // Feature 3: Jerk RMS
     const jerkRms = jerk.length > 0 
       ? Math.sqrt(jerk.reduce((s, x) => s + x * x, 0) / jerk.length) 
       : 0;
     
+    // Feature 4: Zero crossing rate
     const zcr = zc / duration;
 
-    return [velRms, pitchSd, jerkRms, zcr];
+    // Feature 5: Peak-to-peak amplitude
+    const peakToPeak = Math.max(...pitches) - Math.min(...pitches);
+
+    // Feature 6: Mean pitch (captures posture/orientation)
+    const meanPitch = meanP;
+
+    return [velRms, pitchSd, jerkRms, zcr, peakToPeak, meanPitch];
   }
 
-  // Create sliding windows and extract features (matching reference: _makeWindows)
   private makeWindows(timestamps: number[], pitches: number[]): number[][] {
     const windows: number[][] = [];
     const t0 = timestamps[0];
     const tEnd = timestamps[timestamps.length - 1];
 
     for (let cur = t0; cur + WIN_SEC <= tEnd + 0.001; cur += HOP_SEC) {
-      // Find indices within this window
       const idx: number[] = [];
       for (let i = 0; i < timestamps.length; i++) {
         if (timestamps[i] >= cur && timestamps[i] <= cur + WIN_SEC) {
@@ -261,7 +322,7 @@ class ActivityTrainingService {
         }
       }
 
-      if (idx.length >= 4) {
+      if (idx.length >= 10) {
         const selT = idx.map(i => timestamps[i] - cur);
         const selP = idx.map(i => pitches[i]);
         const features = this.extractFeatures(selT, selP);
@@ -326,24 +387,19 @@ class ActivityTrainingService {
 
     onProgress?.(`Extracted ${features.length} windows from ${this.collectedData.length} recordings`);
 
-    // Build tensors - matching reference exactly
+    // Build tensors
     const Xmat = tf.tensor2d(features, [features.length, NUM_FEATURES], 'float32');
     const mean = Xmat.mean(0);
     const variance = tf.moments(Xmat, 0).variance;
-    const std = variance.sqrt().add(1e-8); // Match reference: add(1e-8)
+    const std = variance.sqrt().add(1e-8);
     const Xn = Xmat.sub(mean).div(std);
-    
-    // Sparse labels (integer array) - matching reference
     const yvec = tf.tensor1d(labels, 'float32');
 
-    // Store normalization stats
     this.normMean = Array.from(mean.dataSync());
     this.normStd = Array.from(std.dataSync());
 
-    onProgress?.('Building MLP model...');
+    onProgress?.('Building model...');
 
-    // Build MLP model - matching reference EXACTLY
-    // Reference: Dense(8, relu) → Dense(numOut, softmax)
     if (this.model) {
       this.model.dispose();
     }
@@ -352,7 +408,7 @@ class ActivityTrainingService {
     this.model = tf.sequential({
       layers: [
         tf.layers.dense({ 
-          units: 8, 
+          units: 12, 
           inputShape: [NUM_FEATURES], 
           activation: 'relu',
           useBias: true 
@@ -365,7 +421,6 @@ class ActivityTrainingService {
       ]
     });
 
-    // Compile with sparseCategoricalCrossentropy and adam(0.02) - matching reference
     this.model.compile({
       optimizer: tf.train.adam(0.02),
       loss: 'sparseCategoricalCrossentropy',
@@ -374,22 +429,20 @@ class ActivityTrainingService {
     onProgress?.('Training model...');
 
     try {
-      // Train with 70 epochs, batch 32 - matching reference
       await this.model.fit(Xn, yvec, {
-        epochs: 70,
+        epochs: 100,
         batchSize: 32,
         shuffle: true,
         verbose: 0,
         callbacks: {
           onEpochEnd: (epoch, logs) => {
-            if (epoch % 10 === 0) {
-              onProgress?.(`Epoch ${epoch}/70: loss=${logs?.loss?.toFixed(4)}`);
+            if (epoch % 20 === 0) {
+              onProgress?.(`Training: ${epoch}/100 epochs (loss: ${logs?.loss?.toFixed(4)})`);
             }
           },
         },
       });
 
-      // Cleanup tensors
       Xmat.dispose();
       Xn.dispose();
       yvec.dispose();
@@ -397,7 +450,6 @@ class ActivityTrainingService {
       std.dispose();
       variance.dispose();
 
-      // Reset smoothing state
       this.probEMA = new Array(ACTIVITIES.length).fill(0);
       this.lastLabel = null;
       this.lastChangeMs = 0;
@@ -408,7 +460,7 @@ class ActivityTrainingService {
 
       return { 
         success: true, 
-        message: `Model trained on ${features.length} windows (${activityStats})` 
+        message: `Model trained! (${activityStats})` 
       };
     } catch (error) {
       return { 
@@ -418,43 +470,35 @@ class ActivityTrainingService {
     }
   }
 
-  // Classify using the same logic as reference: classifyTick()
   classify(pitchHistory: PitchData[]): ClassificationResult | null {
     if (!this.model || !this.normMean || !this.normStd) return null;
 
-    // Convert to arrays and filter valid data
     const n = pitchHistory.length;
-    if (n < 6) return null;
+    if (n < 10) return null;
 
-    // Get timestamps in seconds (relative)
     const baseTime = pitchHistory[0].timestamp;
     const timestamps = pitchHistory.map(p => (p.timestamp - baseTime) / 1000);
-    const pitches = pitchHistory.map(p => p.pitch);
+    const pitches = pitchHistory.map(p => p.pitch - this.baselinePitch);
 
-    // Get the last WIN_SEC seconds (matching reference)
     const tEnd = timestamps[n - 1];
     const tStart = tEnd - WIN_SEC;
 
-    // Collect indices for last WIN_SEC seconds (matching reference logic)
     const idx: number[] = [];
     for (let i = n - 1; i >= 0; i--) {
       if (timestamps[i] >= tStart) idx.push(i);
       else break;
     }
-    if (idx.length < 4) return null;
+    if (idx.length < 10) return null;
 
     const sel = idx.reverse();
     const ts = sel.map(i => timestamps[i] - tStart);
     const ps = sel.map(i => pitches[i]);
 
-    // Extract features
     const f = this.extractFeatures(ts, ps);
     if (!f) return null;
 
-    // Normalize using training stats (matching reference)
     const x = f.map((v, i) => (v - this.normMean![i]) / (this.normStd![i] || 1e-8));
     
-    // Predict
     const xt = tf.tensor2d([x]);
     const y = this.model.predict(xt) as tf.Tensor;
     const probs = (y.arraySync() as number[][])[0];
@@ -463,17 +507,16 @@ class ActivityTrainingService {
 
     const numOut = ACTIVITIES.length;
 
-    // EMA smooth the probabilities (matching reference)
+    // EMA smoothing
     for (let i = 0; i < numOut; i++) {
       const prev = (this.probEMA[i] == null) ? probs[i] : this.probEMA[i];
       this.probEMA[i] = prev + ALPHA_EMA * (probs[i] - prev);
     }
 
-    // Hysteresis + dwell-time decision (matching reference)
+    // Hysteresis decision
     const now = performance.now();
     const curIdx = (this.lastLabel == null) ? -1 : this.lastLabel;
 
-    // Find current best by smoothed probs
     let bestIdx = 0;
     let bestVal = this.probEMA[0];
     for (let i = 1; i < numOut; i++) {
@@ -498,16 +541,13 @@ class ActivityTrainingService {
 
     this.lastLabel = chosen;
 
-    const currentActivity = ACTIVITIES[chosen];
-    const confidence = this.probEMA[chosen] * 100;
-
     return {
       still: this.probEMA[0] * 100,
       walking: this.probEMA[1] * 100,
       running: this.probEMA[2] * 100,
       stairs: this.probEMA[3] * 100,
-      currentActivity,
-      confidence,
+      currentActivity: ACTIVITIES[chosen],
+      confidence: this.probEMA[chosen] * 100,
       timestamp: Date.now(),
     };
   }
@@ -522,7 +562,6 @@ class ActivityTrainingService {
 
     this.onClassificationResult = onResult;
 
-    // Use 200ms interval like reference
     this.classificationTimer = setInterval(() => {
       const history = getPitchHistory();
       const result = this.classify(history);
@@ -538,8 +577,6 @@ class ActivityTrainingService {
       this.classificationTimer = null;
     }
     this.onClassificationResult = null;
-    
-    // Reset smoothing state
     this.probEMA = new Array(ACTIVITIES.length).fill(0);
     this.lastLabel = null;
   }
