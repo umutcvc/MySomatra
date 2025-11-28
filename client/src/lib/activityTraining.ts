@@ -24,14 +24,14 @@ export interface ClassificationResult {
   timestamp: number;
 }
 
-// Configuration matching the reference implementation
+// Configuration matching the reference implementation EXACTLY
 const TRAIN_SEC = 20;          // 20 seconds collection per activity
 const WIN_SEC = 3.0;           // 3-second sliding window for features
-const HOP_SEC = 0.5;           // 0.5-second hop between windows
+const HOP_SEC = 0.2;           // 0.2-second hop between windows (reference uses 0.2)
 const NUM_FEATURES = 4;        // vel_rms, pitch_sd, jerk_rms, zcr
-const CLASSIFICATION_INTERVAL_MS = 100;
+const CLASSIFICATION_INTERVAL_MS = 200; // Reference uses 200ms
 
-// Temporal smoothing parameters
+// Temporal smoothing parameters (matching reference)
 const ALPHA_EMA = 0.15;        // EMA smoothing factor
 const DWELL_MS = 100;          // Hold time before switching class
 const SWITCH_MARGIN = 0.06;    // New class must beat old by 6%
@@ -108,7 +108,9 @@ class ActivityTrainingService {
     if (!this.isCollecting) return;
     
     if (pitch !== undefined && !isNaN(pitch)) {
-      this.collectionTimestamps.push(timestamp / 1000); // Convert to seconds
+      // Store timestamps in seconds (relative to collection start)
+      const relativeTime = (timestamp - this.collectionStartTime) / 1000;
+      this.collectionTimestamps.push(relativeTime);
       this.collectionPitches.push(pitch);
     }
 
@@ -192,6 +194,7 @@ class ActivityTrainingService {
   }
 
   // Extract 4 physics-based features from a window of pitch data
+  // Matches reference: _featuresFromPitch(ts, p)
   private extractFeatures(timestamps: number[], pitches: number[]): number[] | null {
     const n = pitches.length;
     if (n < 4) return null;
@@ -205,18 +208,18 @@ class ActivityTrainingService {
       }
     }
 
-    // Calculate jerk (second derivative)
+    // Calculate jerk (second derivative) - from velocity
     const jerk: number[] = [];
     if (vel.length > 1) {
       for (let i = 1; i < vel.length; i++) {
-        const dt = timestamps[i + 1] - timestamps[i];
+        const dt = timestamps[i] - timestamps[i - 1]; // Use original timestamps
         if (dt > 0) {
           jerk.push((vel[i] - vel[i - 1]) / dt);
         }
       }
     }
 
-    // Zero crossing rate on signed delta pitch
+    // Zero crossing rate on signed delta pitch (matching reference)
     let zc = 0;
     for (let i = 2; i < n; i++) {
       const a = pitches[i] - pitches[i - 1];
@@ -226,7 +229,7 @@ class ActivityTrainingService {
     }
     const duration = Math.max(0.001, timestamps[n - 1] - timestamps[0]);
 
-    // Calculate RMS values
+    // Calculate RMS and stats (matching reference)
     const velRms = vel.length > 0 
       ? Math.sqrt(vel.reduce((s, x) => s + x * x, 0) / vel.length) 
       : 0;
@@ -243,7 +246,7 @@ class ActivityTrainingService {
     return [velRms, pitchSd, jerkRms, zcr];
   }
 
-  // Create sliding windows and extract features
+  // Create sliding windows and extract features (matching reference: _makeWindows)
   private makeWindows(timestamps: number[], pitches: number[]): number[][] {
     const windows: number[][] = [];
     const t0 = timestamps[0];
@@ -323,75 +326,76 @@ class ActivityTrainingService {
 
     onProgress?.(`Extracted ${features.length} windows from ${this.collectedData.length} recordings`);
 
-    // Normalize features
-    const featureTensor = tf.tensor2d(features);
-    const mean = featureTensor.mean(0);
-    const std = featureTensor.sub(mean).square().mean(0).sqrt();
+    // Build tensors - matching reference exactly
+    const Xmat = tf.tensor2d(features, [features.length, NUM_FEATURES], 'float32');
+    const mean = Xmat.mean(0);
+    const variance = tf.moments(Xmat, 0).variance;
+    const std = variance.sqrt().add(1e-8); // Match reference: add(1e-8)
+    const Xn = Xmat.sub(mean).div(std);
     
-    this.normMean = Array.from(mean.dataSync());
-    this.normStd = Array.from(std.dataSync()).map(s => Math.max(s, 0.001)); // Prevent division by zero
-    
-    const normalizedFeatures = featureTensor.sub(mean).div(tf.tensor1d(this.normStd));
+    // Sparse labels (integer array) - matching reference
+    const yvec = tf.tensor1d(labels, 'float32');
 
-    // One-hot encode labels
-    const labelsTensor = tf.oneHot(tf.tensor1d(labels, 'int32'), ACTIVITIES.length);
+    // Store normalization stats
+    this.normMean = Array.from(mean.dataSync());
+    this.normStd = Array.from(std.dataSync());
 
     onProgress?.('Building MLP model...');
 
-    // Build MLP model (matching reference implementation)
+    // Build MLP model - matching reference EXACTLY
+    // Reference: Dense(8, relu) → Dense(numOut, softmax)
     if (this.model) {
       this.model.dispose();
     }
 
+    const numOut = ACTIVITIES.length;
     this.model = tf.sequential({
       layers: [
-        tf.layers.dense({
-          inputShape: [NUM_FEATURES],
-          units: 32,
+        tf.layers.dense({ 
+          units: 8, 
+          inputShape: [NUM_FEATURES], 
           activation: 'relu',
-          kernelInitializer: 'heNormal',
+          useBias: true 
         }),
-        tf.layers.dropout({ rate: 0.2 }),
-        tf.layers.dense({
-          units: 16,
-          activation: 'relu',
-          kernelInitializer: 'heNormal',
-        }),
-        tf.layers.dense({
-          units: ACTIVITIES.length,
+        tf.layers.dense({ 
+          units: numOut, 
           activation: 'softmax',
-        }),
-      ],
+          useBias: true 
+        })
+      ]
     });
 
+    // Compile with sparseCategoricalCrossentropy and adam(0.02) - matching reference
     this.model.compile({
-      optimizer: tf.train.adam(0.001),
-      loss: 'categoricalCrossentropy',
-      metrics: ['accuracy'],
+      optimizer: tf.train.adam(0.02),
+      loss: 'sparseCategoricalCrossentropy',
     });
 
     onProgress?.('Training model...');
 
     try {
-      await this.model.fit(normalizedFeatures, labelsTensor, {
-        epochs: 100,
-        batchSize: Math.min(32, Math.floor(features.length / 2)),
+      // Train with 70 epochs, batch 32 - matching reference
+      await this.model.fit(Xn, yvec, {
+        epochs: 70,
+        batchSize: 32,
         shuffle: true,
-        validationSplit: 0.2,
+        verbose: 0,
         callbacks: {
           onEpochEnd: (epoch, logs) => {
-            if (epoch % 20 === 0) {
-              onProgress?.(`Epoch ${epoch}: loss=${logs?.loss?.toFixed(4)}, acc=${(logs?.acc as number * 100)?.toFixed(1)}%`);
+            if (epoch % 10 === 0) {
+              onProgress?.(`Epoch ${epoch}/70: loss=${logs?.loss?.toFixed(4)}`);
             }
           },
         },
       });
 
       // Cleanup tensors
-      featureTensor.dispose();
+      Xmat.dispose();
+      Xn.dispose();
+      yvec.dispose();
       mean.dispose();
-      normalizedFeatures.dispose();
-      labelsTensor.dispose();
+      std.dispose();
+      variance.dispose();
 
       // Reset smoothing state
       this.probEMA = new Array(ACTIVITIES.length).fill(0);
@@ -414,75 +418,88 @@ class ActivityTrainingService {
     }
   }
 
+  // Classify using the same logic as reference: classifyTick()
   classify(pitchHistory: PitchData[]): ClassificationResult | null {
     if (!this.model || !this.normMean || !this.normStd) return null;
 
     // Convert to arrays and filter valid data
-    const validData = pitchHistory.filter(p => p.pitch !== undefined && !isNaN(p.pitch));
-    if (validData.length < 10) return null;
+    const n = pitchHistory.length;
+    if (n < 6) return null;
 
-    const timestamps = validData.map(p => p.timestamp / 1000);
-    const pitches = validData.map(p => p.pitch);
+    // Get timestamps in seconds (relative)
+    const baseTime = pitchHistory[0].timestamp;
+    const timestamps = pitchHistory.map(p => (p.timestamp - baseTime) / 1000);
+    const pitches = pitchHistory.map(p => p.pitch);
 
-    // Get the last WIN_SEC seconds
-    const tEnd = timestamps[timestamps.length - 1];
+    // Get the last WIN_SEC seconds (matching reference)
+    const tEnd = timestamps[n - 1];
     const tStart = tEnd - WIN_SEC;
 
+    // Collect indices for last WIN_SEC seconds (matching reference logic)
     const idx: number[] = [];
-    for (let i = timestamps.length - 1; i >= 0; i--) {
+    for (let i = n - 1; i >= 0; i--) {
       if (timestamps[i] >= tStart) idx.push(i);
       else break;
     }
-
     if (idx.length < 4) return null;
 
-    idx.reverse();
-    const selT = idx.map(i => timestamps[i] - tStart);
-    const selP = idx.map(i => pitches[i]);
+    const sel = idx.reverse();
+    const ts = sel.map(i => timestamps[i] - tStart);
+    const ps = sel.map(i => pitches[i]);
 
     // Extract features
-    const features = this.extractFeatures(selT, selP);
-    if (!features) return null;
+    const f = this.extractFeatures(ts, ps);
+    if (!f) return null;
 
-    // Normalize
-    const normalized = features.map((f, i) => (f - this.normMean![i]) / this.normStd![i]);
-
+    // Normalize using training stats (matching reference)
+    const x = f.map((v, i) => (v - this.normMean![i]) / (this.normStd![i] || 1e-8));
+    
     // Predict
-    const inputTensor = tf.tensor2d([normalized]);
-    const prediction = this.model.predict(inputTensor) as tf.Tensor;
-    const probs = Array.from(prediction.dataSync());
-    inputTensor.dispose();
-    prediction.dispose();
+    const xt = tf.tensor2d([x]);
+    const y = this.model.predict(xt) as tf.Tensor;
+    const probs = (y.arraySync() as number[][])[0];
+    xt.dispose();
+    y.dispose();
 
-    // Apply EMA smoothing
-    for (let i = 0; i < probs.length; i++) {
-      this.probEMA[i] = ALPHA_EMA * probs[i] + (1 - ALPHA_EMA) * this.probEMA[i];
+    const numOut = ACTIVITIES.length;
+
+    // EMA smooth the probabilities (matching reference)
+    for (let i = 0; i < numOut; i++) {
+      const prev = (this.probEMA[i] == null) ? probs[i] : this.probEMA[i];
+      this.probEMA[i] = prev + ALPHA_EMA * (probs[i] - prev);
     }
 
-    // Find best class with hysteresis
-    const now = Date.now();
-    let bestIdx = this.probEMA.indexOf(Math.max(...this.probEMA));
+    // Hysteresis + dwell-time decision (matching reference)
+    const now = performance.now();
+    const curIdx = (this.lastLabel == null) ? -1 : this.lastLabel;
 
-    // Apply dwell time and switch margin
-    if (this.lastLabel !== null && this.lastLabel !== bestIdx) {
-      const timeSinceSwitch = now - this.lastChangeMs;
-      const currentProb = this.probEMA[bestIdx];
-      const lastProb = this.probEMA[this.lastLabel];
+    // Find current best by smoothed probs
+    let bestIdx = 0;
+    let bestVal = this.probEMA[0];
+    for (let i = 1; i < numOut; i++) {
+      if (this.probEMA[i] > bestVal) {
+        bestVal = this.probEMA[i];
+        bestIdx = i;
+      }
+    }
 
-      // Only switch if we've exceeded dwell time AND new class beats old by margin
-      if (timeSinceSwitch < DWELL_MS || currentProb < lastProb + SWITCH_MARGIN) {
-        bestIdx = this.lastLabel;
-      } else {
-        this.lastLabel = bestIdx;
+    let chosen = curIdx;
+    if (curIdx === -1) {
+      chosen = bestIdx;
+      this.lastChangeMs = now;
+    } else if (bestIdx !== curIdx) {
+      const gap = this.probEMA[bestIdx] - this.probEMA[curIdx];
+      const longEnough = (now - this.lastChangeMs) >= DWELL_MS;
+      if (gap >= SWITCH_MARGIN && longEnough) {
+        chosen = bestIdx;
         this.lastChangeMs = now;
       }
-    } else {
-      this.lastLabel = bestIdx;
-      this.lastChangeMs = now;
     }
 
-    const currentActivity = ACTIVITIES[bestIdx];
-    const confidence = this.probEMA[bestIdx] * 100;
+    this.lastLabel = chosen;
+
+    const currentActivity = ACTIVITIES[chosen];
+    const confidence = this.probEMA[chosen] * 100;
 
     return {
       still: this.probEMA[0] * 100,
@@ -505,6 +522,7 @@ class ActivityTrainingService {
 
     this.onClassificationResult = onResult;
 
+    // Use 200ms interval like reference
     this.classificationTimer = setInterval(() => {
       const history = getPitchHistory();
       const result = this.classify(history);
