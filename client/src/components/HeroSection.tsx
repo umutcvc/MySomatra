@@ -7,20 +7,9 @@ interface HeroSectionProps {
   onConnectClick: () => void;
 }
 
-interface Neuron {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  radius: number;
-  hue: number;
-  connections: number[];
-}
-
 export default function HeroSection({ onConnectClick }: HeroSectionProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
-  const neuronsRef = useRef<Neuron[]>([]);
   const timeRef = useRef(0);
   const [scrollOpacity, setScrollOpacity] = useState(1);
 
@@ -53,139 +42,78 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
 
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
-      const width = window.innerWidth * 0.6;
+      const width = window.innerWidth;
       const height = window.innerHeight;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, width, height);
     };
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const neuronCount = 35;
-    const neurons: Neuron[] = [];
-    const canvasWidth = window.innerWidth * 0.6;
-    const canvasHeight = window.innerHeight;
+    const lineCount = 12;
+    const lines: { y: number; speed: number; phase: number; thickness: number }[] = [];
     
-    for (let i = 0; i < neuronCount; i++) {
-      neurons.push({
-        x: Math.random() * canvasWidth,
-        y: Math.random() * canvasHeight,
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: (Math.random() - 0.5) * 0.25,
-        radius: Math.random() * 3 + 2,
-        hue: 15 + Math.random() * 25,
-        connections: [],
+    for (let i = 0; i < lineCount; i++) {
+      lines.push({
+        y: (window.innerHeight / (lineCount + 1)) * (i + 1),
+        speed: 0.5 + Math.random() * 0.5,
+        phase: Math.random() * Math.PI * 2,
+        thickness: 1 + Math.random() * 2,
       });
     }
-    neuronsRef.current = neurons;
-
-    const connectionDistance = 220;
 
     const animate = () => {
       if (!canvas || !ctx) return;
       
-      const width = window.innerWidth * 0.6;
+      const width = window.innerWidth;
       const height = window.innerHeight;
       
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-      ctx.fillRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
 
-      timeRef.current += 0.006;
+      timeRef.current += 0.02;
       const time = timeRef.current;
 
-      neurons.forEach((neuron, i) => {
-        neuron.x += neuron.vx + Math.sin(time * 0.5 + i) * 0.1;
-        neuron.y += neuron.vy + Math.cos(time * 0.5 + i) * 0.1;
-
-        if (neuron.x < 0 || neuron.x > width) neuron.vx *= -1;
-        if (neuron.y < 0 || neuron.y > height) neuron.vy *= -1;
-
-        neuron.x = Math.max(0, Math.min(width, neuron.x));
-        neuron.y = Math.max(0, Math.min(height, neuron.y));
-
-        const hueShift = Math.sin(time + i * 0.2) * 10;
-        const currentHue = neuron.hue + hueShift;
-
-        neurons.forEach((other, j) => {
-          if (i >= j) return;
-          
-          const dx = other.x - neuron.x;
-          const dy = other.y - neuron.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < connectionDistance) {
-            const alpha = Math.pow(1 - distance / connectionDistance, 1.5) * 0.5;
-            const pulse = 0.8 + Math.sin(time * 3 + (i + j) * 0.1) * 0.2;
-            
-            const gradient = ctx.createLinearGradient(
-              neuron.x, neuron.y, other.x, other.y
-            );
-            gradient.addColorStop(0, `hsla(${currentHue}, 80%, 60%, ${alpha * pulse})`);
-            gradient.addColorStop(0.5, `hsla(${(currentHue + 8) % 360}, 85%, 70%, ${alpha * pulse * 1.2})`);
-            gradient.addColorStop(1, `hsla(${other.hue + hueShift}, 80%, 60%, ${alpha * pulse})`);
-            
-            ctx.beginPath();
-            ctx.moveTo(neuron.x, neuron.y);
-            
-            const midX = (neuron.x + other.x) / 2 + Math.sin(time * 2 + i) * 5;
-            const midY = (neuron.y + other.y) / 2 + Math.cos(time * 2 + j) * 5;
-            ctx.quadraticCurveTo(midX, midY, other.x, other.y);
-            
-            ctx.strokeStyle = gradient;
-            ctx.lineWidth = 1.2 + alpha;
-            ctx.stroke();
-          }
-        });
-
-        const glowSize = neuron.radius + Math.sin(time * 1.5 + i) * 1.5;
-        const pulseIntensity = 0.7 + Math.sin(time * 2.5 + i * 0.5) * 0.3;
+      lines.forEach((line, i) => {
+        const vibrationOffset = Math.sin(time * line.speed + line.phase) * 3;
+        const y = line.y + vibrationOffset;
         
-        const outerGlow = ctx.createRadialGradient(
-          neuron.x, neuron.y, 0,
-          neuron.x, neuron.y, glowSize * 15
-        );
-        outerGlow.addColorStop(0, `hsla(${currentHue}, 85%, 70%, ${0.8 * pulseIntensity})`);
-        outerGlow.addColorStop(0.15, `hsla(${currentHue}, 80%, 60%, ${0.35 * pulseIntensity})`);
-        outerGlow.addColorStop(0.4, `hsla(${currentHue}, 75%, 50%, ${0.12 * pulseIntensity})`);
-        outerGlow.addColorStop(0.7, `hsla(${currentHue}, 70%, 45%, ${0.04 * pulseIntensity})`);
-        outerGlow.addColorStop(1, `hsla(${currentHue}, 65%, 40%, 0)`);
+        const pulse = 0.15 + Math.sin(time * 1.5 + i * 0.5) * 0.1;
+        
+        const gradient = ctx.createLinearGradient(0, y, width, y);
+        gradient.addColorStop(0, `hsla(25, 85%, 58%, 0)`);
+        gradient.addColorStop(0.2, `hsla(25, 85%, 58%, ${pulse * 0.5})`);
+        gradient.addColorStop(0.5, `hsla(25, 85%, 65%, ${pulse})`);
+        gradient.addColorStop(0.8, `hsla(25, 85%, 58%, ${pulse * 0.5})`);
+        gradient.addColorStop(1, `hsla(25, 85%, 58%, 0)`);
         
         ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize * 15, 0, Math.PI * 2);
-        ctx.fillStyle = outerGlow;
-        ctx.fill();
-
-        const coreGlow = ctx.createRadialGradient(
-          neuron.x, neuron.y, 0,
-          neuron.x, neuron.y, glowSize * 2
-        );
-        coreGlow.addColorStop(0, `hsla(${currentHue}, 95%, 90%, 1)`);
-        coreGlow.addColorStop(0.4, `hsla(${currentHue}, 90%, 75%, 0.9)`);
-        coreGlow.addColorStop(1, `hsla(${currentHue}, 85%, 65%, 0)`);
+        ctx.moveTo(0, y);
         
-        ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize * 2, 0, Math.PI * 2);
-        ctx.fillStyle = coreGlow;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(neuron.x, neuron.y, glowSize * 0.6, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${currentHue}, 100%, 95%, 1)`;
-        ctx.fill();
+        for (let x = 0; x <= width; x += 20) {
+          const waveY = y + Math.sin(x * 0.01 + time * 2 + line.phase) * 2;
+          ctx.lineTo(x, waveY);
+        }
+        
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = line.thickness;
+        ctx.stroke();
+        
+        const glowGradient = ctx.createLinearGradient(0, y - 20, 0, y + 20);
+        glowGradient.addColorStop(0, `hsla(25, 85%, 58%, 0)`);
+        glowGradient.addColorStop(0.5, `hsla(25, 85%, 58%, ${pulse * 0.1})`);
+        glowGradient.addColorStop(1, `hsla(25, 85%, 58%, 0)`);
+        
+        ctx.fillStyle = glowGradient;
+        ctx.fillRect(0, y - 20, width, 40);
       });
 
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
     animate();
 
     return () => {
@@ -197,30 +125,8 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
   }, []);
 
   return (
-    <section className="relative min-h-screen w-full overflow-hidden bg-black">
-      <canvas
-        ref={canvasRef}
-        className="absolute left-0 top-0 h-full"
-        style={{ 
-          opacity: 0.85,
-          width: '55%',
-        }}
-      />
-
-      <div 
-        className="absolute left-[35%] top-0 w-[35%] h-full z-[5] pointer-events-none"
-        style={{
-          background: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.9) 20%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.3) 80%, transparent 100%)',
-        }}
-      />
-
-      <div className="absolute right-0 top-0 w-[60%] h-full overflow-hidden">
-        <div 
-          className="absolute inset-0 z-10 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to right, black 0%, rgba(0,0,0,0.85) 10%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.2) 50%, transparent 70%), linear-gradient(to bottom, transparent 70%, black 100%)',
-          }}
-        />
+    <section className="relative min-h-screen w-full overflow-hidden">
+      <div className="absolute inset-0 w-full h-full overflow-hidden">
         <video
           autoPlay
           loop
@@ -228,17 +134,24 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: 'blur(2px) brightness(0.85)',
-            opacity: 0.7,
+            filter: 'brightness(0.4)',
           }}
         >
           <source src={relaxVideo} type="video/mp4" />
         </video>
       </div>
 
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+        style={{ 
+          mixBlendMode: 'screen',
+        }}
+      />
+
       <div 
         className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black pointer-events-none z-20" 
-        style={{ opacity: 0.8 }}
+        style={{ opacity: 0.9 }}
       />
 
       <div 
