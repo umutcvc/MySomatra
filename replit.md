@@ -9,8 +9,8 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 - **Theme**: Always dark mode (no light mode toggle)
 - **Design**: Minimalist Apple-style with black backgrounds
 - **Color Scheme**: Pastel orange primary color (HSL 25, 85%, 58%)
-- **Hero Section**: Animated neural network visualization with color-shifting gradients
-- **Device Image**: Sleek futuristic wearable with matte black body, orange LED edge glow on pure black background (mysomatra_device_orange_glow.png)
+- **Hero Section**: Animated neural network visualization (35 neurons with curved organic connections, pulsing glow effects) with smooth blurred transition to video background
+- **Device Image**: 3D circular wearable with rose gold/orange glowing edge on pure black seamless background (3d_mysomatra_device_circular_design.png)
 - **Communication style**: Simple, everyday language
 
 ## System Architecture
@@ -34,7 +34,15 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 
 **Scroll Animations**: Apple-style scroll-based fade animations using Intersection Observer API. The `ScrollFade` component in `client/src/components/ScrollFade.tsx` provides fade-in animations with directional movement (up, down, left, right) triggered when elements enter the viewport.
 
-**Hero Section Layout**: Split layout with animated neural network canvas on the left (60% width) and video background on the right (50% width) with blur/fade overlay. Hero content fades out as user scrolls down.
+**Hero Section Layout**: Split layout with animated neural network canvas on the left (55% width) and video background on the right (60% width) with progressive blur/fade gradient overlay for smooth homogeneous transition. Video has 2px blur for dreamy effect. Hero content fades out as user scrolls down.
+
+**Activity Training (TinyML)**: TensorFlow.js-powered activity classification system located in dashboard:
+- Collect 20-second IMU data samples for activities (walking, running, swimming, standing)
+- Minimum 200 samples required per collection (enforces data quality)
+- Train 1D CNN model in-browser after collecting 2+ different activities
+- Real-time classification with exponential moving average smoothing (200ms inference interval)
+- Dynamic probability bars showing likelihood percentages for each activity
+- Model architecture: Conv1D(16) → MaxPool → Conv1D(32) → GlobalAvgPool → Dense(64) → Softmax(4)
 
 ### Backend Architecture
 
@@ -100,6 +108,7 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 - Google Fonts - Inter font family for typography
 - Radix UI - Accessible component primitives
 - Leaflet/OpenStreetMap - Free map tiles for GPS tracking
+- TensorFlow.js - In-browser ML model training and inference for activity classification
 
 **Build Tools**:
 - Vite - Frontend build tool and dev server
