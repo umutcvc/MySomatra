@@ -74,33 +74,25 @@ class BluetoothService {
 
   async requestDevice(): Promise<DeviceInfo | null> {
     if (!this.isSupported()) {
-      throw new Error('Web Bluetooth is not supported in this browser');
+      throw new Error('Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera on desktop.');
     }
 
     try {
-      // Try to filter for MySomatra devices first for a cleaner picker
-      try {
-        this.device = await navigator.bluetooth.requestDevice({
-          filters: [
-            { namePrefix: 'MySomatra' },
-            { namePrefix: 'DevOpBreadBoard' },
-            { namePrefix: 'Somatra' },
-          ],
-          optionalServices: [NUS_SERVICE_UUID],
-        });
-      } catch (filterError) {
-        // If no devices found with filter, fall back to showing all devices
-        this.device = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [NUS_SERVICE_UUID],
-        });
-      }
+      // Show all BLE devices with the Nordic UART Service
+      // This gives users the most flexibility in finding their device
+      this.device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [NUS_SERVICE_UUID],
+      });
 
       if (!this.device) {
         return null;
       }
 
+      console.log('Selected device:', this.device.name, this.device.id);
+
       this.device.addEventListener('gattserverdisconnected', () => {
+        console.log('Device disconnected via GATT event');
         this.handleDisconnect();
       });
 
@@ -111,8 +103,18 @@ class BluetoothService {
         connected: false,
       };
     } catch (error) {
-      if ((error as Error).name === 'NotFoundError') {
+      const err = error as Error;
+      console.error('Bluetooth request error:', err.name, err.message);
+      
+      if (err.name === 'NotFoundError') {
+        // User cancelled the picker
         return null;
+      }
+      if (err.name === 'NotSupportedError') {
+        throw new Error('Web Bluetooth is not supported. Please use Chrome, Edge, or Opera.');
+      }
+      if (err.name === 'SecurityError') {
+        throw new Error('Bluetooth access was blocked. This page must be served over HTTPS.');
       }
       throw error;
     }
@@ -124,17 +126,29 @@ class BluetoothService {
     }
 
     try {
+      console.log('Connecting to GATT server...');
       this.server = await this.device.gatt?.connect() || null;
       
       if (!this.server) {
-        throw new Error('Failed to connect to GATT server');
+        throw new Error('Failed to connect to GATT server. Make sure your device is powered on and in range.');
       }
 
-      const nusService = await this.server.getPrimaryService(NUS_SERVICE_UUID);
+      console.log('GATT connected, getting NUS service...');
+      
+      let nusService;
+      try {
+        nusService = await this.server.getPrimaryService(NUS_SERVICE_UUID);
+      } catch (serviceError) {
+        console.error('NUS service error:', serviceError);
+        throw new Error('Device does not have the expected Nordic UART Service. Make sure you selected the correct device.');
+      }
+      
+      console.log('NUS service found, getting characteristics...');
       
       this.writeCharacteristic = await nusService.getCharacteristic(NUS_RX_CHARACTERISTIC_UUID);
       this.notifyCharacteristic = await nusService.getCharacteristic(NUS_TX_CHARACTERISTIC_UUID);
       
+      console.log('Starting notifications...');
       await this.notifyCharacteristic.startNotifications();
       this.notifyCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
         this.handleNotification(event);
@@ -142,16 +156,26 @@ class BluetoothService {
 
       this._isConnected = true;
       this.notifyConnectionChange(true);
+      console.log('Connection complete!');
 
       try {
         await this.sendCommand('STREAM,ON');
+        console.log('IMU streaming enabled');
       } catch (e) {
         console.log('Could not enable streaming, continuing anyway');
       }
 
       return true;
     } catch (error) {
-      console.error('Connection error:', error);
+      const err = error as Error;
+      console.error('Connection error:', err.name, err.message);
+      
+      if (err.message.includes('User cancelled')) {
+        throw new Error('Connection was cancelled.');
+      }
+      if (err.name === 'NetworkError') {
+        throw new Error('Connection failed. Make sure your device is powered on, nearby, and not connected to another app.');
+      }
       throw error;
     }
   }
