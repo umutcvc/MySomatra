@@ -25,7 +25,7 @@ export interface ClassificationResult {
 }
 
 // Configuration matching the reference implementation EXACTLY
-const TRAIN_SEC = 20;          // 20 seconds collection per activity
+const TRAIN_SEC = 10;          // 10 seconds collection per activity (user stops moving after ~10s)
 const WIN_SEC = 3.0;           // 3-second sliding window for features
 const HOP_SEC = 0.2;           // 0.2-second hop between windows (reference uses 0.2)
 const NUM_FEATURES = 4;        // vel_rms, pitch_sd, jerk_rms, zcr
