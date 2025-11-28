@@ -78,10 +78,23 @@ class BluetoothService {
     }
 
     try {
-      this.device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [NUS_SERVICE_UUID],
-      });
+      // Try to filter for MySomatra devices first for a cleaner picker
+      try {
+        this.device = await navigator.bluetooth.requestDevice({
+          filters: [
+            { namePrefix: 'MySomatra' },
+            { namePrefix: 'DevOpBreadBoard' },
+            { namePrefix: 'Somatra' },
+          ],
+          optionalServices: [NUS_SERVICE_UUID],
+        });
+      } catch (filterError) {
+        // If no devices found with filter, fall back to showing all devices
+        this.device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [NUS_SERVICE_UUID],
+        });
+      }
 
       if (!this.device) {
         return null;
