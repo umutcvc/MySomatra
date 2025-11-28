@@ -37,12 +37,15 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 **Hero Section Layout**: Split layout with animated neural network canvas on the left (55% width) and video background on the right (60% width) with progressive blur/fade gradient overlay for smooth homogeneous transition. Video has 2px blur for dreamy effect. Hero content fades out as user scrolls down.
 
 **Activity Training (TinyML)**: TensorFlow.js-powered activity classification system located in dashboard:
-- Collect 20-second IMU data samples for activities (walking, running, swimming, standing)
-- Minimum 200 samples required per collection (enforces data quality)
-- Train 1D CNN model in-browser after collecting 2+ different activities
-- Real-time classification with exponential moving average smoothing (200ms inference interval)
+- **Instant capture**: Uses shared pitch history buffer - tap any activity button to instantly capture current motion data (no 20-second wait)
+- Minimum 100 samples required per capture (~1 second at 100Hz streaming rate)
+- Train 1D CNN model in-browser after capturing 2+ different activities
+- Real-time classification with exponential moving average smoothing (100ms inference interval)
 - Dynamic probability bars showing likelihood percentages for each activity
-- Model architecture: Conv1D(16) → MaxPool → Conv1D(32) → GlobalAvgPool → Dense(64) → Softmax(4)
+- Smart padding for classification when buffer < 100 samples
+- Visual feedback: "Waiting for data..." when buffer insufficient, amber indicator when paused
+- Auto-stops classification on device disconnect with toast notification
+- Model architecture: Conv1D(16) → MaxPool → Conv1D(32) → GlobalAvgPool → Dense(32) → Softmax(4)
 
 ### Backend Architecture
 

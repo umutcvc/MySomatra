@@ -1,5 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
-import { bluetoothService, PitchData } from './bluetooth';
+import type { PitchData } from './bluetooth';
 
 export type ActivityType = 'walking' | 'running' | 'swimming' | 'standing';
 
@@ -22,29 +22,29 @@ export interface ClassificationResult {
   swimming: number;
   standing: number;
   currentActivity: ActivityType;
+  confidence: number;
   timestamp: number;
 }
 
-const SAMPLE_DURATION_MS = 20000;
-const SAMPLE_RATE_HZ = 100;
 const WINDOW_SIZE = 100;
 const WINDOW_OVERLAP = 0.5;
+const MIN_SAMPLES_FOR_CAPTURE = 100;
+const CLASSIFICATION_INTERVAL_MS = 100;
+const SMOOTHING_FACTOR = 0.4;
+const MIN_SAMPLES_FOR_CLASSIFICATION = 50;
 
 class ActivityTrainingService {
   private model: tf.LayersModel | null = null;
   private collectedData: ActivitySample[] = [];
-  private isCollecting: boolean = false;
   private isTraining: boolean = false;
   private isClassifying: boolean = false;
-  private currentSamples: number[] = [];
-  private classificationBuffer: number[] = [];
-  private unsubscribePitch: (() => void) | null = null;
   
-  private onProgressCallback: ((progress: TrainingProgress) => void) | null = null;
+  private classificationInterval: ReturnType<typeof setInterval> | null = null;
+  private smoothedProbs: number[] = [0.25, 0.25, 0.25, 0.25];
+  private lastClassificationTime: number = 0;
+  private pendingPrediction: boolean = false;
+  
   private onClassificationCallback: ((result: ClassificationResult) => void) | null = null;
-  private onCollectionProgressCallback: ((progress: number, total: number) => void) | null = null;
-  private collectionStartTime: number = 0;
-  private collectionInterval: number | null = null;
 
   getCollectedActivities(): ActivitySample[] {
     return [...this.collectedData];
@@ -55,6 +55,19 @@ class ActivityTrainingService {
     return unique.size;
   }
 
+  getSampleCountByActivity(): Record<ActivityType, number> {
+    const counts: Record<ActivityType, number> = {
+      walking: 0,
+      running: 0,
+      swimming: 0,
+      standing: 0,
+    };
+    for (const sample of this.collectedData) {
+      counts[sample.activity]++;
+    }
+    return counts;
+  }
+
   canTrain(): boolean {
     return this.getUniqueActivityCount() >= 2 && this.collectedData.length >= 2;
   }
@@ -63,86 +76,32 @@ class ActivityTrainingService {
     return this.model !== null;
   }
 
-  async startCollection(activity: ActivityType, onProgress: (elapsed: number, total: number) => void): Promise<{ success: boolean; sampleCount: number }> {
-    if (this.isCollecting) {
-      throw new Error('Already collecting data');
+  captureFromHistory(activity: ActivityType, pitchHistory: PitchData[]): { success: boolean; sampleCount: number; message: string } {
+    const validSamples = pitchHistory.filter(p => p.pitch !== undefined && !isNaN(p.pitch));
+    
+    if (validSamples.length < MIN_SAMPLES_FOR_CAPTURE) {
+      const needed = MIN_SAMPLES_FOR_CAPTURE - validSamples.length;
+      const secondsNeeded = Math.ceil(needed / 100);
+      return { 
+        success: false, 
+        sampleCount: validSamples.length,
+        message: `Need ${MIN_SAMPLES_FOR_CAPTURE} samples (${validSamples.length} now). Wait ${secondsNeeded}s.`
+      };
     }
 
-    if (!bluetoothService.isConnected()) {
-      throw new Error('Device not connected');
-    }
-
-    this.isCollecting = true;
-    this.currentSamples = [];
-    this.collectionStartTime = Date.now();
-    this.onCollectionProgressCallback = onProgress;
-
-    this.unsubscribePitch = bluetoothService.onPitchData((data: PitchData) => {
-      if (this.isCollecting) {
-        this.currentSamples.push(data.pitch);
-      }
+    const samples = validSamples.map(p => p.pitch);
+    
+    this.collectedData.push({
+      activity,
+      samples: [...samples],
+      timestamp: Date.now(),
     });
 
-    if (typeof window !== 'undefined') {
-      this.collectionInterval = window.setInterval(() => {
-        const elapsed = Date.now() - this.collectionStartTime;
-        if (this.onCollectionProgressCallback) {
-          this.onCollectionProgressCallback(Math.min(elapsed, SAMPLE_DURATION_MS), SAMPLE_DURATION_MS);
-        }
-      }, 100);
-    }
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const result = this.stopCollection(activity);
-        resolve(result);
-      }, SAMPLE_DURATION_MS);
-    });
-  }
-
-  private stopCollection(activity: ActivityType): { success: boolean; sampleCount: number } {
-    if (this.collectionInterval) {
-      clearInterval(this.collectionInterval);
-      this.collectionInterval = null;
-    }
-    
-    if (this.unsubscribePitch) {
-      this.unsubscribePitch();
-      this.unsubscribePitch = null;
-    }
-
-    const sampleCount = this.currentSamples.length;
-    const minSamples = WINDOW_SIZE * 2;
-    
-    if (sampleCount >= minSamples) {
-      this.collectedData.push({
-        activity,
-        samples: [...this.currentSamples],
-        timestamp: Date.now(),
-      });
-      this.isCollecting = false;
-      this.currentSamples = [];
-      return { success: true, sampleCount };
-    }
-
-    this.isCollecting = false;
-    this.currentSamples = [];
-    return { success: false, sampleCount };
-  }
-
-  cancelCollection(): void {
-    if (this.collectionInterval) {
-      clearInterval(this.collectionInterval);
-      this.collectionInterval = null;
-    }
-    
-    if (this.unsubscribePitch) {
-      this.unsubscribePitch();
-      this.unsubscribePitch = null;
-    }
-    
-    this.isCollecting = false;
-    this.currentSamples = [];
+    return { 
+      success: true, 
+      sampleCount: samples.length,
+      message: `Captured ${samples.length} samples for ${activity}`
+    };
   }
 
   deleteActivity(index: number): void {
@@ -153,6 +112,7 @@ class ActivityTrainingService {
 
   clearAllData(): void {
     this.collectedData = [];
+    this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
   }
 
   private createWindows(samples: number[]): number[][] {
@@ -169,11 +129,12 @@ class ActivityTrainingService {
 
   private normalizeWindow(window: number[]): number[] {
     const mean = window.reduce((a, b) => a + b, 0) / window.length;
-    const std = Math.sqrt(window.reduce((a, b) => a + (b - mean) ** 2, 0) / window.length) || 1;
+    const variance = window.reduce((a, b) => a + (b - mean) ** 2, 0) / window.length;
+    const std = Math.sqrt(variance) || 1;
     return window.map(v => (v - mean) / std);
   }
 
-  private prepareTrainingData(): { xs: tf.Tensor; ys: tf.Tensor } {
+  private prepareTrainingData(): { xs: tf.Tensor; ys: tf.Tensor } | null {
     const activities: ActivityType[] = ['walking', 'running', 'swimming', 'standing'];
     const allWindows: number[][] = [];
     const allLabels: number[] = [];
@@ -186,6 +147,10 @@ class ActivityTrainingService {
         allWindows.push(window);
         allLabels.push(labelIndex);
       }
+    }
+
+    if (allWindows.length === 0) {
+      return null;
     }
 
     const xs = tf.tensor2d(allWindows).reshape([allWindows.length, WINDOW_SIZE, 1]);
@@ -214,12 +179,12 @@ class ActivityTrainingService {
     }));
     model.add(tf.layers.globalAveragePooling1d({}));
     
-    model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
-    model.add(tf.layers.dropout({ rate: 0.3 }));
+    model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+    model.add(tf.layers.dropout({ rate: 0.2 }));
     model.add(tf.layers.dense({ units: 4, activation: 'softmax' }));
     
     model.compile({
-      optimizer: tf.train.adam(0.001),
+      optimizer: tf.train.adam(0.002),
       loss: 'categoricalCrossentropy',
       metrics: ['accuracy'],
     });
@@ -236,36 +201,34 @@ class ActivityTrainingService {
       throw new Error('Already training');
     }
 
-    const validSamples = this.collectedData.filter(s => s.samples.length >= WINDOW_SIZE);
-    if (validSamples.length < 2) {
-      throw new Error('Not enough valid samples. Each sample needs at least ' + WINDOW_SIZE + ' data points.');
-    }
-
     this.isTraining = true;
-    this.onProgressCallback = onProgress;
 
     try {
-      const { xs, ys } = this.prepareTrainingData();
+      const data = this.prepareTrainingData();
       
-      if (xs.shape[0] === 0) {
-        xs.dispose();
-        ys.dispose();
-        throw new Error('No valid training windows could be created from the collected data.');
+      if (!data) {
+        throw new Error('No valid training data. Capture more samples.');
+      }
+
+      const { xs, ys } = data;
+      
+      if (this.model) {
+        this.model.dispose();
       }
       
       this.model = this.buildModel();
 
-      const totalEpochs = 30;
+      const totalEpochs = 25;
       
       await this.model.fit(xs, ys, {
         epochs: totalEpochs,
-        batchSize: 32,
-        validationSplit: 0.2,
+        batchSize: 16,
+        validationSplit: 0.15,
         shuffle: true,
         callbacks: {
           onEpochEnd: (epoch, logs) => {
-            if (this.onProgressCallback && logs) {
-              this.onProgressCallback({
+            if (logs) {
+              onProgress({
                 epoch: epoch + 1,
                 totalEpochs,
                 loss: logs.loss || 0,
@@ -278,67 +241,59 @@ class ActivityTrainingService {
 
       xs.dispose();
       ys.dispose();
+      
+      this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
     } finally {
       this.isTraining = false;
     }
   }
 
-  private classificationInterval: number | null = null;
-  private isPredicting: boolean = false;
-  private smoothedProbs: number[] = [0.25, 0.25, 0.25, 0.25];
-  private readonly SMOOTHING_FACTOR = 0.3;
-
-  startClassification(onClassification: (result: ClassificationResult) => void): void {
+  classifyFromHistory(pitchHistory: PitchData[]): ClassificationResult | null {
     if (!this.model) {
-      throw new Error('Model not trained yet');
+      return null;
     }
 
-    if (this.isClassifying) {
-      return;
+    const validSamples = pitchHistory.filter(p => p.pitch !== undefined && !isNaN(p.pitch));
+    
+    if (validSamples.length < MIN_SAMPLES_FOR_CLASSIFICATION) {
+      return null;
     }
 
-    this.isClassifying = true;
-    this.classificationBuffer = [];
-    this.onClassificationCallback = onClassification;
-    this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
-
-    this.unsubscribePitch = bluetoothService.onPitchData((data: PitchData) => {
-      if (!this.isClassifying) return;
-
-      this.classificationBuffer.push(data.pitch);
-
-      if (this.classificationBuffer.length > WINDOW_SIZE * 3) {
-        this.classificationBuffer = this.classificationBuffer.slice(-WINDOW_SIZE * 2);
-      }
-    });
-
-    if (typeof window !== 'undefined') {
-      this.classificationInterval = window.setInterval(() => {
-        if (this.classificationBuffer.length >= WINDOW_SIZE && !this.isPredicting) {
-          this.runClassification();
-        }
-      }, 200);
+    const now = Date.now();
+    if (now - this.lastClassificationTime < CLASSIFICATION_INTERVAL_MS) {
+      return null;
     }
-  }
+    
+    if (this.pendingPrediction) {
+      return null;
+    }
 
-  private runClassification(): void {
-    if (!this.model || !this.onClassificationCallback || this.isPredicting) return;
-
-    this.isPredicting = true;
+    this.pendingPrediction = true;
+    this.lastClassificationTime = now;
 
     try {
-      const windowData = this.classificationBuffer.slice(-WINDOW_SIZE);
+      const samplesToUse = validSamples.slice(-WINDOW_SIZE);
+      const windowData = samplesToUse.map(p => p.pitch);
+      
+      if (windowData.length < WINDOW_SIZE) {
+        const padding = new Array(WINDOW_SIZE - windowData.length).fill(windowData[0] || 0);
+        windowData.unshift(...padding);
+      }
+      
       const normalized = this.normalizeWindow(windowData);
       
       const input = tf.tensor2d([normalized]).reshape([1, WINDOW_SIZE, 1]);
       const prediction = this.model.predict(input) as tf.Tensor;
       const rawProbs = Array.from(prediction.dataSync());
       
+      input.dispose();
+      prediction.dispose();
+
       for (let i = 0; i < 4; i++) {
-        this.smoothedProbs[i] = this.SMOOTHING_FACTOR * rawProbs[i] + 
-                                 (1 - this.SMOOTHING_FACTOR) * this.smoothedProbs[i];
+        this.smoothedProbs[i] = SMOOTHING_FACTOR * rawProbs[i] + 
+                                (1 - SMOOTHING_FACTOR) * this.smoothedProbs[i];
       }
-      
+
       const activities: ActivityType[] = ['walking', 'running', 'swimming', 'standing'];
       let maxIdx = 0;
       let maxProb = this.smoothedProbs[0];
@@ -350,22 +305,53 @@ class ActivityTrainingService {
         }
       }
 
-      this.onClassificationCallback({
+      return {
         walking: this.smoothedProbs[0] * 100,
         running: this.smoothedProbs[1] * 100,
         swimming: this.smoothedProbs[2] * 100,
         standing: this.smoothedProbs[3] * 100,
         currentActivity: activities[maxIdx],
-        timestamp: Date.now(),
-      });
-
-      input.dispose();
-      prediction.dispose();
+        confidence: maxProb * 100,
+        timestamp: now,
+      };
     } catch (error) {
       console.error('Classification error:', error);
+      return null;
     } finally {
-      this.isPredicting = false;
+      this.pendingPrediction = false;
     }
+  }
+
+  startClassification(
+    getPitchHistory: () => PitchData[],
+    onClassification: (result: ClassificationResult) => void
+  ): void {
+    if (!this.model) {
+      throw new Error('Model not trained yet');
+    }
+
+    if (this.isClassifying) {
+      this.stopClassification();
+    }
+
+    this.isClassifying = true;
+    this.onClassificationCallback = onClassification;
+    this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
+    this.lastClassificationTime = 0;
+
+    const classify = () => {
+      if (!this.isClassifying) return;
+      
+      const pitchHistory = getPitchHistory();
+      const result = this.classifyFromHistory(pitchHistory);
+      
+      if (result && this.onClassificationCallback) {
+        this.onClassificationCallback(result);
+      }
+    };
+
+    this.classificationInterval = setInterval(classify, CLASSIFICATION_INTERVAL_MS);
+    classify();
   }
 
   stopClassification(): void {
@@ -374,17 +360,8 @@ class ActivityTrainingService {
       clearInterval(this.classificationInterval);
       this.classificationInterval = null;
     }
-    if (this.unsubscribePitch) {
-      this.unsubscribePitch();
-      this.unsubscribePitch = null;
-    }
-    this.classificationBuffer = [];
     this.onClassificationCallback = null;
-    this.isPredicting = false;
-  }
-
-  getIsCollecting(): boolean {
-    return this.isCollecting;
+    this.pendingPrediction = false;
   }
 
   getIsTraining(): boolean {
@@ -393,6 +370,14 @@ class ActivityTrainingService {
 
   getIsClassifying(): boolean {
     return this.isClassifying;
+  }
+
+  disposeModel(): void {
+    if (this.model) {
+      this.model.dispose();
+      this.model = null;
+    }
+    this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
   }
 }
 
