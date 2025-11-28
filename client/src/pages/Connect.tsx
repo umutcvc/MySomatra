@@ -9,7 +9,7 @@ import JournalWidget from "@/components/dashboard/JournalWidget";
 import TasksWidget from "@/components/dashboard/TasksWidget";
 import TherapyWidget from "@/components/dashboard/TherapyWidget";
 import IMUPlotWidget from "@/components/dashboard/IMUPlotWidget";
-import ActivityTrainingWidget from "@/components/dashboard/ActivityTrainingWidget";
+import { ActivityTrainingWidget } from "@/components/dashboard/ActivityTrainingWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBluetooth } from "@/hooks/use-bluetooth";
 
@@ -23,6 +23,7 @@ export default function Connect() {
     isConnected,
     device,
     batteryLevel,
+    pitchHistory,
     error,
     scanAndConnect,
     disconnect,
@@ -125,7 +126,11 @@ export default function Connect() {
               <div className="lg:col-span-2">
                 <Card className="h-full overflow-hidden" data-testid="card-activity-training">
                   <CardContent className="p-6 h-full overflow-y-auto">
-                    <ActivityTrainingWidget />
+                    <ActivityTrainingWidget 
+                      isConnected={isConnected}
+                      isStreaming={pitchHistory.length > 0}
+                      pitchHistory={pitchHistory}
+                    />
                   </CardContent>
                 </Card>
               </div>

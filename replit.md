@@ -36,16 +36,19 @@ MySomatra is a wellness wearable device that provides neural therapy through pre
 
 **Hero Section Layout**: Split layout with animated neural network canvas on the left (55% width) and video background on the right (60% width) with progressive blur/fade gradient overlay for smooth homogeneous transition. Video has 2px blur for dreamy effect. Hero content fades out as user scrolls down.
 
-**Activity Training (TinyML)**: TensorFlow.js-powered activity classification system located in dashboard:
-- **Instant capture**: Uses shared pitch history buffer - tap any activity button to instantly capture current motion data (no 20-second wait)
-- Minimum 100 samples required per capture (~1 second at 100Hz streaming rate)
-- Train 1D CNN model in-browser after capturing 2+ different activities
-- Real-time classification with exponential moving average smoothing (100ms inference interval)
-- Dynamic probability bars showing likelihood percentages for each activity
-- Smart padding for classification when buffer < 100 samples
-- Visual feedback: "Waiting for data..." when buffer insufficient, amber indicator when paused
+**Activity Training (TinyML)**: TensorFlow.js-powered activity classification system matching MySomatra reference implementation:
+- **20-second data collection**: Each activity requires 20 seconds of continuous recording (matching reference)
+- **Feature engineering**: Extracts 4 physics-based features from 3-second sliding windows:
+  - Velocity RMS (pitch derivative)
+  - Pitch standard deviation  
+  - Jerk RMS (second derivative)
+  - Zero crossing rate
+- **MLP model**: Dense(32, ReLU) → Dropout(0.2) → Dense(16, ReLU) → Softmax(4)
+- **Temporal smoothing**: EMA (α=0.15) with dwell time (100ms) and switch margin (6%) to prevent jittery predictions
+- **Progress feedback**: Real-time progress bar during collection, sample count display
+- Train model after collecting 2+ different activities
 - Auto-stops classification on device disconnect with toast notification
-- Model architecture: Conv1D(16) → MaxPool → Conv1D(32) → GlobalAvgPool → Dense(32) → Softmax(4)
+- Activities: Still, Walking, Running, Stairs
 
 ### Backend Architecture
 
