@@ -63,7 +63,7 @@ class ActivityTrainingService {
     return this.model !== null;
   }
 
-  async startCollection(activity: ActivityType, onProgress: (elapsed: number, total: number) => void): Promise<void> {
+  async startCollection(activity: ActivityType, onProgress: (elapsed: number, total: number) => void): Promise<{ success: boolean; sampleCount: number }> {
     if (this.isCollecting) {
       throw new Error('Already collecting data');
     }
@@ -83,22 +83,24 @@ class ActivityTrainingService {
       }
     });
 
-    this.collectionInterval = window.setInterval(() => {
-      const elapsed = Date.now() - this.collectionStartTime;
-      if (this.onCollectionProgressCallback) {
-        this.onCollectionProgressCallback(Math.min(elapsed, SAMPLE_DURATION_MS), SAMPLE_DURATION_MS);
-      }
-    }, 100);
+    if (typeof window !== 'undefined') {
+      this.collectionInterval = window.setInterval(() => {
+        const elapsed = Date.now() - this.collectionStartTime;
+        if (this.onCollectionProgressCallback) {
+          this.onCollectionProgressCallback(Math.min(elapsed, SAMPLE_DURATION_MS), SAMPLE_DURATION_MS);
+        }
+      }, 100);
+    }
 
     return new Promise((resolve) => {
       setTimeout(() => {
-        this.stopCollection(activity);
-        resolve();
+        const result = this.stopCollection(activity);
+        resolve(result);
       }, SAMPLE_DURATION_MS);
     });
   }
 
-  private stopCollection(activity: ActivityType): void {
+  private stopCollection(activity: ActivityType): { success: boolean; sampleCount: number } {
     if (this.collectionInterval) {
       clearInterval(this.collectionInterval);
       this.collectionInterval = null;
@@ -109,16 +111,23 @@ class ActivityTrainingService {
       this.unsubscribePitch = null;
     }
 
-    if (this.currentSamples.length > 0) {
+    const sampleCount = this.currentSamples.length;
+    const minSamples = WINDOW_SIZE * 2;
+    
+    if (sampleCount >= minSamples) {
       this.collectedData.push({
         activity,
         samples: [...this.currentSamples],
         timestamp: Date.now(),
       });
+      this.isCollecting = false;
+      this.currentSamples = [];
+      return { success: true, sampleCount };
     }
 
     this.isCollecting = false;
     this.currentSamples = [];
+    return { success: false, sampleCount };
   }
 
   cancelCollection(): void {
@@ -227,11 +236,23 @@ class ActivityTrainingService {
       throw new Error('Already training');
     }
 
+    const validSamples = this.collectedData.filter(s => s.samples.length >= WINDOW_SIZE);
+    if (validSamples.length < 2) {
+      throw new Error('Not enough valid samples. Each sample needs at least ' + WINDOW_SIZE + ' data points.');
+    }
+
     this.isTraining = true;
     this.onProgressCallback = onProgress;
 
     try {
       const { xs, ys } = this.prepareTrainingData();
+      
+      if (xs.shape[0] === 0) {
+        xs.dispose();
+        ys.dispose();
+        throw new Error('No valid training windows could be created from the collected data.');
+      }
+      
       this.model = this.buildModel();
 
       const totalEpochs = 30;
@@ -262,6 +283,11 @@ class ActivityTrainingService {
     }
   }
 
+  private classificationInterval: number | null = null;
+  private isPredicting: boolean = false;
+  private smoothedProbs: number[] = [0.25, 0.25, 0.25, 0.25];
+  private readonly SMOOTHING_FACTOR = 0.3;
+
   startClassification(onClassification: (result: ClassificationResult) => void): void {
     if (!this.model) {
       throw new Error('Model not trained yet');
@@ -274,64 +300,87 @@ class ActivityTrainingService {
     this.isClassifying = true;
     this.classificationBuffer = [];
     this.onClassificationCallback = onClassification;
+    this.smoothedProbs = [0.25, 0.25, 0.25, 0.25];
 
     this.unsubscribePitch = bluetoothService.onPitchData((data: PitchData) => {
       if (!this.isClassifying) return;
 
       this.classificationBuffer.push(data.pitch);
 
-      if (this.classificationBuffer.length > WINDOW_SIZE * 2) {
+      if (this.classificationBuffer.length > WINDOW_SIZE * 3) {
         this.classificationBuffer = this.classificationBuffer.slice(-WINDOW_SIZE * 2);
       }
-
-      if (this.classificationBuffer.length >= WINDOW_SIZE) {
-        this.runClassification();
-      }
     });
+
+    if (typeof window !== 'undefined') {
+      this.classificationInterval = window.setInterval(() => {
+        if (this.classificationBuffer.length >= WINDOW_SIZE && !this.isPredicting) {
+          this.runClassification();
+        }
+      }, 200);
+    }
   }
 
   private runClassification(): void {
-    if (!this.model || !this.onClassificationCallback) return;
+    if (!this.model || !this.onClassificationCallback || this.isPredicting) return;
 
-    const window = this.classificationBuffer.slice(-WINDOW_SIZE);
-    const normalized = this.normalizeWindow(window);
-    
-    const input = tf.tensor2d([normalized]).reshape([1, WINDOW_SIZE, 1]);
-    const prediction = this.model.predict(input) as tf.Tensor;
-    const probs = prediction.dataSync();
-    
-    const activities: ActivityType[] = ['walking', 'running', 'swimming', 'standing'];
-    let maxIdx = 0;
-    let maxProb = probs[0];
-    
-    for (let i = 1; i < probs.length; i++) {
-      if (probs[i] > maxProb) {
-        maxProb = probs[i];
-        maxIdx = i;
+    this.isPredicting = true;
+
+    try {
+      const windowData = this.classificationBuffer.slice(-WINDOW_SIZE);
+      const normalized = this.normalizeWindow(windowData);
+      
+      const input = tf.tensor2d([normalized]).reshape([1, WINDOW_SIZE, 1]);
+      const prediction = this.model.predict(input) as tf.Tensor;
+      const rawProbs = Array.from(prediction.dataSync());
+      
+      for (let i = 0; i < 4; i++) {
+        this.smoothedProbs[i] = this.SMOOTHING_FACTOR * rawProbs[i] + 
+                                 (1 - this.SMOOTHING_FACTOR) * this.smoothedProbs[i];
       }
+      
+      const activities: ActivityType[] = ['walking', 'running', 'swimming', 'standing'];
+      let maxIdx = 0;
+      let maxProb = this.smoothedProbs[0];
+      
+      for (let i = 1; i < this.smoothedProbs.length; i++) {
+        if (this.smoothedProbs[i] > maxProb) {
+          maxProb = this.smoothedProbs[i];
+          maxIdx = i;
+        }
+      }
+
+      this.onClassificationCallback({
+        walking: this.smoothedProbs[0] * 100,
+        running: this.smoothedProbs[1] * 100,
+        swimming: this.smoothedProbs[2] * 100,
+        standing: this.smoothedProbs[3] * 100,
+        currentActivity: activities[maxIdx],
+        timestamp: Date.now(),
+      });
+
+      input.dispose();
+      prediction.dispose();
+    } catch (error) {
+      console.error('Classification error:', error);
+    } finally {
+      this.isPredicting = false;
     }
-
-    this.onClassificationCallback({
-      walking: probs[0] * 100,
-      running: probs[1] * 100,
-      swimming: probs[2] * 100,
-      standing: probs[3] * 100,
-      currentActivity: activities[maxIdx],
-      timestamp: Date.now(),
-    });
-
-    input.dispose();
-    prediction.dispose();
   }
 
   stopClassification(): void {
     this.isClassifying = false;
+    if (this.classificationInterval) {
+      clearInterval(this.classificationInterval);
+      this.classificationInterval = null;
+    }
     if (this.unsubscribePitch) {
       this.unsubscribePitch();
       this.unsubscribePitch = null;
     }
     this.classificationBuffer = [];
     this.onClassificationCallback = null;
+    this.isPredicting = false;
   }
 
   getIsCollecting(): boolean {

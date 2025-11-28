@@ -7,9 +7,9 @@ import MapWidget from "@/components/dashboard/MapWidget";
 import CalendarWidget from "@/components/dashboard/CalendarWidget";
 import JournalWidget from "@/components/dashboard/JournalWidget";
 import TasksWidget from "@/components/dashboard/TasksWidget";
-import ActivityWidget from "@/components/dashboard/ActivityWidget";
 import TherapyWidget from "@/components/dashboard/TherapyWidget";
 import IMUPlotWidget from "@/components/dashboard/IMUPlotWidget";
+import ActivityTrainingWidget from "@/components/dashboard/ActivityTrainingWidget";
 import { useToast } from "@/hooks/use-toast";
 import { useBluetooth } from "@/hooks/use-bluetooth";
 
@@ -122,14 +122,16 @@ export default function Connect() {
             </div>
 
             <div className="grid lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-1">
-                <ActivityWidget className="h-[360px]" />
+              <div className="lg:col-span-2">
+                <Card className="h-full overflow-hidden" data-testid="card-activity-training">
+                  <CardContent className="p-6 h-full overflow-y-auto">
+                    <ActivityTrainingWidget />
+                  </CardContent>
+                </Card>
               </div>
-              <div className="lg:col-span-1">
-                <CalendarWidget className="h-[360px]" />
-              </div>
-              <div className="lg:col-span-1">
-                <TasksWidget className="h-[360px]" />
+              <div className="lg:col-span-1 flex flex-col gap-4">
+                <CalendarWidget className="flex-1" />
+                <TasksWidget className="flex-1" />
               </div>
             </div>
 

@@ -21,6 +21,7 @@ import {
   ClassificationResult 
 } from "@/lib/activityTraining";
 import { bluetoothService } from "@/lib/bluetooth";
+import { useToast } from "@/hooks/use-toast";
 
 const ACTIVITIES: { id: ActivityType; label: string; icon: typeof Activity }[] = [
   { id: 'walking', label: 'Walking', icon: Footprints },
@@ -30,6 +31,7 @@ const ACTIVITIES: { id: ActivityType; label: string; icon: typeof Activity }[] =
 ];
 
 export default function ActivityTrainingWidget() {
+  const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(bluetoothService.isConnected());
   const [isCollecting, setIsCollecting] = useState(false);
   const [collectingActivity, setCollectingActivity] = useState<ActivityType | null>(null);
@@ -64,18 +66,36 @@ export default function ActivityTrainingWidget() {
     setCollectionProgress(0);
 
     try {
-      await activityTrainingService.startCollection(activity, (elapsed, total) => {
+      const result = await activityTrainingService.startCollection(activity, (elapsed, total) => {
         setCollectionProgress((elapsed / total) * 100);
       });
-      setCollectedData(activityTrainingService.getCollectedActivities());
+      
+      if (result.success) {
+        setCollectedData(activityTrainingService.getCollectedActivities());
+        toast({
+          title: "Data Collected",
+          description: `Successfully captured ${result.sampleCount} samples for ${activity}.`,
+        });
+      } else {
+        toast({
+          title: "Collection Failed",
+          description: `Only received ${result.sampleCount} samples. Make sure the device is streaming IMU data.`,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Collection error:', error);
+      toast({
+        title: "Collection Error",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
     } finally {
       setIsCollecting(false);
       setCollectingActivity(null);
       setCollectionProgress(0);
     }
-  }, [isConnected]);
+  }, [isConnected, toast]);
 
   const handleCancelCollection = useCallback(() => {
     activityTrainingService.cancelCollection();
@@ -101,12 +121,21 @@ export default function ActivityTrainingWidget() {
         setTrainingProgress(progress);
       });
       setIsModelTrained(true);
+      toast({
+        title: "Model Trained",
+        description: "Activity classification model is ready for real-time predictions.",
+      });
     } catch (error) {
       console.error('Training error:', error);
+      toast({
+        title: "Training Failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
     } finally {
       setIsTraining(false);
     }
-  }, []);
+  }, [toast]);
 
   const handleStartClassification = useCallback(() => {
     if (!isConnected || !isModelTrained) return;
