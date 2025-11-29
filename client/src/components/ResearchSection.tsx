@@ -75,68 +75,67 @@ export default function ResearchSection() {
         </ScrollFade>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {researchPapers.map((paper, index) => {
+          {researchPapers.map((paper) => {
             const Icon = paper.icon;
             return (
-              <ScrollFade key={paper.id} direction="up" delay={index * 100}>
-                <Card 
-                  className={`${paper.bgColor} border ${paper.borderColor} backdrop-blur-sm h-full hover:scale-[1.02] transition-all duration-300`}
-                  data-testid={`card-research-${paper.id}`}
-                >
-                  <CardContent className="p-6 flex flex-col h-full">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`w-12 h-12 rounded-xl ${paper.iconBg} flex items-center justify-center`}>
-                        <Icon className={`w-6 h-6 ${paper.iconColor}`} />
-                      </div>
-                      <Badge 
-                        variant="outline" 
-                        className="text-xs border-white/20 text-white/70"
-                      >
-                        {paper.status}
-                      </Badge>
+              <Card 
+                key={paper.id}
+                className={`${paper.bgColor} border ${paper.borderColor} backdrop-blur-sm h-full hover:scale-[1.02] transition-all duration-300`}
+                data-testid={`card-research-${paper.id}`}
+              >
+                <CardContent className="p-6 flex flex-col h-full">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-12 h-12 rounded-xl ${paper.iconBg} flex items-center justify-center`}>
+                      <Icon className={`w-6 h-6 ${paper.iconColor}`} />
                     </div>
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs border-white/20 text-white/70"
+                    >
+                      {paper.status}
+                    </Badge>
+                  </div>
 
-                    <h3 className="text-xl font-semibold text-white mb-1">
-                      {paper.title}
-                    </h3>
-                    <p className="text-sm text-primary mb-3">
-                      {paper.subtitle}
-                    </p>
-                    <p className="text-sm text-white/50 mb-6 flex-grow">
-                      {paper.description}
-                    </p>
+                  <h3 className="text-xl font-semibold text-white mb-1">
+                    {paper.title}
+                  </h3>
+                  <p className="text-sm text-primary mb-3">
+                    {paper.subtitle}
+                  </p>
+                  <p className="text-sm text-white/50 mb-6 flex-grow">
+                    {paper.description}
+                  </p>
 
-                    <div className="space-y-3">
-                      <div className="text-xs text-white/40 uppercase tracking-wider">
-                        Key Metrics
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {paper.metrics.map((metric, i) => (
-                          <span 
-                            key={i}
-                            className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/60 border border-white/10"
-                          >
-                            {metric}
-                          </span>
-                        ))}
-                      </div>
+                  <div className="space-y-3">
+                    <div className="text-xs text-white/40 uppercase tracking-wider">
+                      Key Metrics
                     </div>
-
-                    <div className="mt-6 pt-4 border-t border-white/10">
-                      <Link href={paper.link}>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-between bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white group"
-                          data-testid={`button-read-paper-${paper.id}`}
+                    <div className="flex flex-wrap gap-2">
+                      {paper.metrics.map((metric, i) => (
+                        <span 
+                          key={i}
+                          className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/60 border border-white/10"
                         >
-                          <span>Read White Paper</span>
-                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                      </Link>
+                          {metric}
+                        </span>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
-              </ScrollFade>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-white/10">
+                    <Link href={paper.link}>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-between bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white group"
+                        data-testid={`button-read-paper-${paper.id}`}
+                      >
+                        <span>Read White Paper</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
