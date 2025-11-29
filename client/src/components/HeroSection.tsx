@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import lifestyleVideo from "@assets/generated_videos/mysomatra_lifestyle_day_montage.mp4";
+import lifestyleVideo from "@assets/generated_videos/blonde_woman_wellness_lifestyle_montage.mp4";
 
 interface HeroSectionProps {
   onConnectClick: () => void;
