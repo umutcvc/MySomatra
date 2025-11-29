@@ -3,6 +3,7 @@ import DeviceShowcase from "@/components/DeviceShowcase";
 import UseCasesSection from "@/components/UseCasesSection";
 import TechSpecs from "@/components/TechSpecs";
 import HowItWorks from "@/components/HowItWorks";
+import ResearchSection from "@/components/ResearchSection";
 import CTASection from "@/components/CTASection";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export default function Home() {
           <nav className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-white/50 hover:text-white transition-colors">Features</a>
             <a href="#therapy" className="text-sm text-white/50 hover:text-white transition-colors">Therapy</a>
+            <a href="#research" className="text-sm text-white/50 hover:text-white transition-colors">Research</a>
             <a href="#specs" className="text-sm text-white/50 hover:text-white transition-colors">Specs</a>
           </nav>
 
@@ -55,6 +57,7 @@ export default function Home() {
             <nav className="flex flex-col p-4 gap-4">
               <a href="#features" className="text-sm text-white/50">Features</a>
               <a href="#therapy" className="text-sm text-white/50">Therapy</a>
+              <a href="#research" className="text-sm text-white/50">Research</a>
               <a href="#specs" className="text-sm text-white/50">Specs</a>
               <Button onClick={handleConnectClick} className="w-full rounded-full">
                 Connect Device
@@ -76,6 +79,7 @@ export default function Home() {
           <TechSpecs />
         </section>
         <HowItWorks />
+        <ResearchSection />
         <CTASection onConnectClick={handleConnectClick} />
       </main>
 
