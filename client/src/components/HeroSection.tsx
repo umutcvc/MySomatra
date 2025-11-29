@@ -54,15 +54,16 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const lineCount = 12;
-    const lines: { y: number; speed: number; phase: number; thickness: number }[] = [];
+    const lineCount = 14;
+    const lines: { y: number; speed: number; phase: number; thickness: number; amplitude: number }[] = [];
     
     for (let i = 0; i < lineCount; i++) {
       lines.push({
         y: (window.innerHeight / (lineCount + 1)) * (i + 1),
-        speed: 0.5 + Math.random() * 0.5,
+        speed: 0.6 + Math.random() * 0.8,
         phase: Math.random() * Math.PI * 2,
         thickness: 1.5 + Math.random() * 2.5,
+        amplitude: 0.7 + Math.random() * 0.6,
       });
     }
 
@@ -74,30 +75,33 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
       
       ctx.clearRect(0, 0, width, height);
 
-      timeRef.current += 0.02;
+      timeRef.current += 0.018;
       const time = timeRef.current;
 
       lines.forEach((line, i) => {
-        const vibrationOffset = Math.sin(time * line.speed + line.phase) * 3;
+        const vibrationOffset = Math.sin(time * line.speed + line.phase) * 6;
         const y = line.y + vibrationOffset;
         
-        const pulse = 0.15 + Math.sin(time * 1.5 + i * 0.5) * 0.1;
+        const pulse = 0.18 + Math.sin(time * 1.8 + i * 0.4) * 0.12;
         
         const gradient = ctx.createLinearGradient(0, y, width, y);
         gradient.addColorStop(0, `hsla(25, 85%, 58%, 0)`);
-        gradient.addColorStop(0.2, `hsla(25, 85%, 58%, ${pulse * 0.5})`);
+        gradient.addColorStop(0.15, `hsla(25, 85%, 58%, ${pulse * 0.4})`);
         gradient.addColorStop(0.5, `hsla(25, 85%, 65%, ${pulse})`);
-        gradient.addColorStop(0.8, `hsla(25, 85%, 58%, ${pulse * 0.5})`);
+        gradient.addColorStop(0.85, `hsla(25, 85%, 58%, ${pulse * 0.4})`);
         gradient.addColorStop(1, `hsla(25, 85%, 58%, 0)`);
         
         ctx.beginPath();
         ctx.moveTo(0, y);
         
-        for (let x = 0; x <= width; x += 8) {
-          const wave1 = Math.sin(x * 0.015 + time * 2 + line.phase) * 8;
-          const wave2 = Math.sin(x * 0.008 + time * 1.5 - line.phase) * 5;
-          const wave3 = Math.sin(x * 0.025 + time * 3 + i) * 3;
-          const waveY = y + wave1 + wave2 + wave3;
+        const amp = line.amplitude;
+        for (let x = 0; x <= width; x += 6) {
+          const wave1 = Math.sin(x * 0.012 + time * 2.2 + line.phase) * 14 * amp;
+          const wave2 = Math.sin(x * 0.006 + time * 1.4 - line.phase) * 10 * amp;
+          const wave3 = Math.sin(x * 0.022 + time * 3.5 + i) * 6 * amp;
+          const wave4 = Math.sin(x * 0.035 + time * 2.8 - i * 0.3) * 4 * amp;
+          const wave5 = Math.cos(x * 0.018 + time * 1.8 + line.phase * 0.5) * 5 * amp;
+          const waveY = y + wave1 + wave2 + wave3 + wave4 + wave5;
           ctx.lineTo(x, waveY);
         }
         
@@ -105,13 +109,13 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
         ctx.lineWidth = line.thickness;
         ctx.stroke();
         
-        const glowGradient = ctx.createLinearGradient(0, y - 30, 0, y + 30);
+        const glowGradient = ctx.createLinearGradient(0, y - 40, 0, y + 40);
         glowGradient.addColorStop(0, `hsla(25, 85%, 58%, 0)`);
-        glowGradient.addColorStop(0.5, `hsla(25, 85%, 58%, ${pulse * 0.15})`);
+        glowGradient.addColorStop(0.5, `hsla(25, 85%, 58%, ${pulse * 0.18})`);
         glowGradient.addColorStop(1, `hsla(25, 85%, 58%, 0)`);
         
         ctx.fillStyle = glowGradient;
-        ctx.fillRect(0, y - 30, width, 60);
+        ctx.fillRect(0, y - 40, width, 80);
       });
 
       animationRef.current = requestAnimationFrame(animate);
