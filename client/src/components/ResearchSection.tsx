@@ -125,8 +125,8 @@ export default function ResearchSection() {
                     <div className="mt-6 pt-4 border-t border-white/10">
                       <Link href={paper.link}>
                         <Button 
-                          variant="ghost" 
-                          className="w-full justify-between text-white/70 hover:text-white hover:bg-white/5 group"
+                          variant="outline" 
+                          className="w-full justify-between bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white group"
                           data-testid={`button-read-paper-${paper.id}`}
                         >
                           <span>Read White Paper</span>
