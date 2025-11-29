@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import relaxVideo from "@assets/generated_videos/person_relaxing_with_mysomatra_device.mp4";
+import lifestyleVideo from "@assets/generated_videos/mysomatra_lifestyle_day_montage.mp4";
 
 interface HeroSectionProps {
   onConnectClick: () => void;
@@ -141,10 +141,11 @@ export default function HeroSection({ onConnectClick }: HeroSectionProps) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: 'brightness(0.4)',
+            filter: 'brightness(0.45)',
+            objectPosition: 'center 30%',
           }}
         >
-          <source src={relaxVideo} type="video/mp4" />
+          <source src={lifestyleVideo} type="video/mp4" />
         </video>
       </div>
 
