@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Waves, Brain, Users, FileText, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import ScrollFade from "./ScrollFade";
 
 const researchPapers = [
@@ -17,6 +18,7 @@ const researchPapers = [
     borderColor: "border-blue-500/30",
     iconBg: "bg-blue-500/20",
     iconColor: "text-blue-400",
+    link: "/research/vibration-penetration",
   },
   {
     id: 2,
@@ -30,6 +32,7 @@ const researchPapers = [
     borderColor: "border-purple-500/30",
     iconBg: "bg-purple-500/20",
     iconColor: "text-purple-400",
+    link: "/research/brain-computer-interface",
   },
   {
     id: 3,
@@ -43,6 +46,7 @@ const researchPapers = [
     borderColor: "border-primary/30",
     iconBg: "bg-primary/20",
     iconColor: "text-primary",
+    link: "/research/user-experience",
   },
 ];
 
@@ -119,14 +123,16 @@ export default function ResearchSection() {
                     </div>
 
                     <div className="mt-6 pt-4 border-t border-white/10">
-                      <Button 
-                        variant="ghost" 
-                        className="w-full justify-between text-white/70 hover:text-white hover:bg-white/5 group"
-                        data-testid={`button-read-paper-${paper.id}`}
-                      >
-                        <span>Read White Paper</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                      </Button>
+                      <Link href={paper.link}>
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-between text-white/70 hover:text-white hover:bg-white/5 group"
+                          data-testid={`button-read-paper-${paper.id}`}
+                        >
+                          <span>Read White Paper</span>
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
