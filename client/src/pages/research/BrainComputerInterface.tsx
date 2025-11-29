@@ -5,6 +5,12 @@ import { Brain, Zap, Target, Activity, ChevronRight } from "lucide-react";
 import { useEffect, useRef } from "react";
 import eegVideo from "@assets/generated_videos/eeg_brain-computer_interface_session.mp4";
 
+function useScrollToTop() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+}
+
 function AnimatedBrainSVG() {
   return (
     <svg viewBox="0 0 400 250" className="w-full h-64">
@@ -218,6 +224,8 @@ function EEGWaveform() {
 }
 
 export default function BrainComputerInterface() {
+  useScrollToTop();
+  
   return (
     <ResearchPaperLayout
       title="Neural Pathway Mapping via Brain-Computer Interface"

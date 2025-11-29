@@ -5,6 +5,12 @@ import { Waves, Beaker, Ruler, Activity, ChevronRight, Play } from "lucide-react
 import { useEffect, useRef, useState } from "react";
 import labVideo from "@assets/generated_videos/lab_phantom_tissue_experiment_setup.mp4";
 
+function useScrollToTop() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+}
+
 function AnimatedWaveSVG() {
   return (
     <svg viewBox="0 0 400 200" className="w-full h-48">
@@ -130,6 +136,8 @@ function IntensityChart() {
 }
 
 export default function VibrationPenetration() {
+  useScrollToTop();
+  
   return (
     <ResearchPaperLayout
       title="Vibration Penetration Depth Analysis"

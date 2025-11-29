@@ -5,6 +5,12 @@ import { Users, Star, MessageSquare, TrendingUp, ChevronRight, CheckCircle } fro
 import { useEffect, useRef } from "react";
 import uxVideo from "@assets/generated_videos/user_experience_testing_session.mp4";
 
+function useScrollToTop() {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+}
+
 function AnimatedUserJourneySVG() {
   return (
     <svg viewBox="0 0 500 150" className="w-full h-40">
@@ -202,6 +208,8 @@ function NPSGauge() {
 }
 
 export default function UserExperience() {
+  useScrollToTop();
+  
   return (
     <ResearchPaperLayout
       title="User Experience & Efficacy Studies"

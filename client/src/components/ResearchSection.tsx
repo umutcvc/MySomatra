@@ -14,9 +14,9 @@ const researchPapers = [
     icon: Waves,
     status: "In Progress",
     metrics: ["Tissue depth mapping", "Intensity gradients", "Frequency response"],
-    color: "from-blue-500/20 to-cyan-500/20",
-    borderColor: "border-blue-500/30",
-    iconBg: "bg-blue-500/20",
+    bgColor: "bg-gradient-to-br from-blue-900/60 to-cyan-900/40",
+    borderColor: "border-blue-500/50",
+    iconBg: "bg-blue-500/30",
     iconColor: "text-blue-400",
     link: "/research/vibration-penetration",
   },
@@ -28,9 +28,9 @@ const researchPapers = [
     icon: Brain,
     status: "Planned",
     metrics: ["Cortical activation", "Optimal placement", "Response latency"],
-    color: "from-purple-500/20 to-pink-500/20",
-    borderColor: "border-purple-500/30",
-    iconBg: "bg-purple-500/20",
+    bgColor: "bg-gradient-to-br from-purple-900/60 to-pink-900/40",
+    borderColor: "border-purple-500/50",
+    iconBg: "bg-purple-500/30",
     iconColor: "text-purple-400",
     link: "/research/brain-computer-interface",
   },
@@ -42,9 +42,9 @@ const researchPapers = [
     icon: Users,
     status: "Ongoing",
     metrics: ["Usability scores", "Efficacy ratings", "Long-term outcomes"],
-    color: "from-primary/20 to-orange-500/20",
-    borderColor: "border-primary/30",
-    iconBg: "bg-primary/20",
+    bgColor: "bg-gradient-to-br from-orange-900/60 to-amber-900/40",
+    borderColor: "border-primary/50",
+    iconBg: "bg-primary/30",
     iconColor: "text-primary",
     link: "/research/user-experience",
   },
@@ -80,7 +80,7 @@ export default function ResearchSection() {
             return (
               <ScrollFade key={paper.id} direction="up" delay={index * 100}>
                 <Card 
-                  className={`bg-gradient-to-br ${paper.color} border ${paper.borderColor} backdrop-blur-sm h-full hover:scale-[1.02] transition-all duration-300`}
+                  className={`${paper.bgColor} border ${paper.borderColor} backdrop-blur-sm h-full hover:scale-[1.02] transition-all duration-300`}
                   data-testid={`card-research-${paper.id}`}
                 >
                   <CardContent className="p-6 flex flex-col h-full">
