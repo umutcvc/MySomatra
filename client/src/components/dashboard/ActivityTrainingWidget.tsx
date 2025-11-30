@@ -27,13 +27,13 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [collectedActivities, setCollectedActivities] = useState<{ activity: ActivityType; sampleCount: number; index: number; quality: string; windowCount: number }[]>([]);
   const [isModelTrained, setIsModelTrained] = useState(false);
-  
+
   // Collection state
   const [isCollecting, setIsCollecting] = useState(false);
   const [collectingActivity, setCollectingActivity] = useState<ActivityType | null>(null);
   const [collectionProgress, setCollectionProgress] = useState(0);
   const [collectionRemaining, setCollectionRemaining] = useState(0);
-  
+
   // Track previous connection state for disconnect detection
   const wasConnectedRef = useRef(isConnected);
   const lastPitchRef = useRef<PitchData | null>(null);
@@ -42,7 +42,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
   useEffect(() => {
     if (isCollecting && pitchHistory.length > 0) {
       const latestPitch = pitchHistory[pitchHistory.length - 1];
-      
+
       // Only feed new data points
       if (!lastPitchRef.current || latestPitch.timestamp !== lastPitchRef.current.timestamp) {
         activityTrainingService.feedPitchData(latestPitch.pitch, latestPitch.timestamp);
@@ -63,7 +63,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
         variant: "destructive",
       });
     }
-    
+
     // Cancel collection if disconnected
     if (wasConnectedRef.current && !isConnected && isCollecting) {
       activityTrainingService.cancelCollection();
@@ -76,7 +76,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
         variant: "destructive",
       });
     }
-    
+
     wasConnectedRef.current = isConnected;
   }, [isConnected, isClassifying, isCollecting, toast]);
 
@@ -115,6 +115,12 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
       return;
     }
 
+    // Calibrate baseline from current pitch history before collection
+    if (pitchHistory.length > 0) {
+      activityTrainingService.calibrateBaseline(pitchHistory);
+      console.log('✓ Baseline calibrated from', pitchHistory.length, 'samples');
+    }
+
     setIsCollecting(true);
     setCollectingActivity(activity);
     setCollectionProgress(0);
@@ -132,7 +138,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
         setCollectingActivity(null);
         setCollectionProgress(0);
         setCollectionRemaining(0);
-        
+
         if (success) {
           toast({
             title: "Data Captured",
@@ -145,7 +151,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
             variant: "destructive",
           });
         }
-        
+
         refreshCollectedActivities();
       }
     );
@@ -163,7 +169,7 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
     setCollectingActivity(null);
     setCollectionProgress(0);
     setCollectionRemaining(0);
-    
+
     toast({
       title: "Collection Cancelled",
       description: "Data collection has been cancelled.",
@@ -235,6 +241,12 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
         return;
       }
 
+      // Calibrate baseline from current pitch history before classification
+      if (pitchHistory.length > 0) {
+        activityTrainingService.calibrateBaseline(pitchHistory);
+        console.log('✓ Baseline calibrated for classification from', pitchHistory.length, 'samples');
+      }
+
       activityTrainingService.startClassification(
         () => pitchHistory,
         (result) => {
@@ -249,6 +261,19 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
     }
   }, [isClassifying, isModelTrained, isConnected, isStreaming, pitchHistory, toast]);
 
+  const handleClearAllData = useCallback(() => {
+    if (window.confirm('This will delete ALL recorded activities and the trained model. Continue?')) {
+      activityTrainingService.clearAllData();
+      refreshCollectedActivities();
+      setClassification(null);
+      setIsModelTrained(false);
+      toast({
+        title: "Data Cleared",
+        description: "All training data and model have been reset.",
+      });
+    }
+  }, [refreshCollectedActivities, toast]);
+
   const uniqueActivitiesCount = new Set(collectedActivities.map(a => a.activity)).size;
   const canTrain = uniqueActivitiesCount >= 2 && !isTraining && !isCollecting;
 
@@ -262,273 +287,292 @@ export function ActivityTrainingWidget({ isConnected, isStreaming, pitchHistory 
           <Brain className="w-5 h-5 text-primary" />
           <h3 className="font-semibold text-foreground">Activity Training</h3>
         </div>
-        {isModelTrained && (
-          <Button
-            variant={isClassifying ? "secondary" : "default"}
-            size="sm"
-            onClick={handleToggleClassification}
-            disabled={!isConnected || !isStreaming || isCollecting}
-            className="gap-1.5"
-            data-testid="button-toggle-classification"
-          >
-            <Zap className="w-4 h-4" />
-            {isClassifying ? 'Stop' : 'Classify'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {collectedActivities.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAllData}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Clear all training data"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+          {isModelTrained && (
+            <Button
+              variant={isClassifying ? "secondary" : "default"}
+              size="sm"
+              onClick={handleToggleClassification}
+              disabled={!isConnected || !isStreaming || isCollecting}
+              className="gap-1.5"
+              data-testid="button-toggle-classification"
+            >
+              <Zap className="w-4 h-4" />
+              {isClassifying ? 'Stop' : 'Classify'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Collection in progress */}
-      {isCollecting && collectingActivity && (
-        <Card className="border-primary/50 bg-primary/5">
-          <CardContent className="pt-4 space-y-3">
+      {
+        isCollecting && collectingActivity && (
+          <Card className="border-primary/50 bg-primary/5">
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const activity = ACTIVITIES.find(a => a.id === collectingActivity);
+                    const Icon = activity?.icon || Activity;
+                    return (
+                      <>
+                        <Icon className="w-5 h-5" style={{ color: activity?.color }} />
+                        <span className="font-medium text-foreground">
+                          Recording {activity?.label}...
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelCollection}
+                  className="text-muted-foreground hover:text-destructive"
+                  data-testid="button-cancel-collection"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <Progress value={collectionProgress} className="h-2" />
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{Math.round(collectionProgress)}%</span>
+                <span>{collectionRemaining}s remaining</span>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Keep performing the activity until recording completes
+              </p>
+            </CardContent>
+          </Card>
+        )
+      }
+
+      {/* Activity capture buttons */}
+      {
+        !isClassifying && !isCollecting && (
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Record 20s of each activity while streaming:
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {ACTIVITIES.map((activity) => {
+                const count = getActivityCount(activity.id);
+                const Icon = activity.icon;
+
+                return (
+                  <Button
+                    key={activity.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStartCollection(activity.id)}
+                    disabled={!isConnected || !isStreaming || isTraining}
+                    className="justify-start gap-2 h-10 relative"
+                    data-testid={`button-capture-${activity.id}`}
+                  >
+                    <Icon
+                      className="w-4 h-4 flex-shrink-0"
+                      style={{ color: activity.color }}
+                    />
+                    <span className="truncate">{activity.label}</span>
+                    {count > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-auto text-xs px-1.5 min-w-[1.25rem] h-5"
+                        style={{ backgroundColor: `${activity.color}20`, color: activity.color }}
+                      >
+                        {count}
+                      </Badge>
+                    )}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Collected recordings list */}
+            {collectedActivities.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Recordings ({collectedActivities.length}):
+                </div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {collectedActivities.map(({ activity, windowCount, quality, index }) => {
+                    const activityInfo = ACTIVITIES.find(a => a.id === activity);
+                    const Icon = activityInfo?.icon || Activity;
+                    const qualityColor = quality === 'good' ? 'text-emerald-500' : quality === 'fair' ? 'text-amber-500' : 'text-red-500';
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between py-1 px-2 rounded bg-muted/30"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon
+                            className="w-3 h-3"
+                            style={{ color: activityInfo?.color }}
+                          />
+                          <span className="text-xs text-foreground capitalize">{activity}</span>
+                          <span className="text-xs text-muted-foreground">({windowCount} windows)</span>
+                          <span className={`text-xs ${qualityColor}`}>{quality}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteActivity(index)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          data-testid={`button-delete-activity-${index}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={handleTrainModel}
+              disabled={!canTrain}
+              className="w-full gap-2"
+              data-testid="button-train-model"
+            >
+              {isTraining ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Training MLP...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4" />
+                  Train Model
+                  {uniqueActivitiesCount < 2 && (
+                    <span className="text-xs opacity-70">
+                      (need {2 - uniqueActivitiesCount} more activity)
+                    </span>
+                  )}
+                </>
+              )}
+            </Button>
+          </div>
+        )
+      }
+
+      {/* Classification results */}
+      {
+        isClassifying && (
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {(() => {
-                  const activity = ACTIVITIES.find(a => a.id === collectingActivity);
-                  const Icon = activity?.icon || Activity;
-                  return (
-                    <>
-                      <Icon className="w-5 h-5" style={{ color: activity?.color }} />
-                      <span className="font-medium text-foreground">
-                        Recording {activity?.label}...
-                      </span>
-                    </>
-                  );
-                })()}
+                <div className={`w-2 h-2 rounded-full ${!hasEnoughData ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`} />
+                <span className="text-sm font-medium text-foreground">
+                  {!hasEnoughData ? 'Waiting for data...' : 'Live Classification'}
+                </span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleCancelCollection}
+                onClick={handleToggleClassification}
                 className="text-muted-foreground hover:text-destructive"
-                data-testid="button-cancel-collection"
+                data-testid="button-stop-classification"
               >
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            <Progress value={collectionProgress} className="h-2" />
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>{Math.round(collectionProgress)}%</span>
-              <span>{collectionRemaining}s remaining</span>
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Keep performing the activity until recording completes
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Activity capture buttons */}
-      {!isClassifying && !isCollecting && (
-        <div className="space-y-3">
-          <div className="text-sm text-muted-foreground">
-            Record 10s of each activity while streaming:
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {ACTIVITIES.map((activity) => {
-              const count = getActivityCount(activity.id);
-              const Icon = activity.icon;
-              
-              return (
-                <Button
-                  key={activity.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleStartCollection(activity.id)}
-                  disabled={!isConnected || !isStreaming || isTraining}
-                  className="justify-start gap-2 h-10 relative"
-                  data-testid={`button-capture-${activity.id}`}
-                >
-                  <Icon 
-                    className="w-4 h-4 flex-shrink-0" 
-                    style={{ color: activity.color }}
-                  />
-                  <span className="truncate">{activity.label}</span>
-                  {count > 0 && (
-                    <Badge 
-                      variant="secondary" 
-                      className="ml-auto text-xs px-1.5 min-w-[1.25rem] h-5"
-                      style={{ backgroundColor: `${activity.color}20`, color: activity.color }}
-                    >
-                      {count}
-                    </Badge>
-                  )}
-                </Button>
-              );
-            })}
-          </div>
-
-          {/* Collected recordings list */}
-          {collectedActivities.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">
-                Recordings ({collectedActivities.length}):
+            {!hasEnoughData && (
+              <div className="text-center py-4 text-muted-foreground">
+                <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
+                <p className="text-sm">Waiting for IMU data stream...</p>
+                <p className="text-xs mt-1">{pitchHistory.length}/30 samples</p>
               </div>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {collectedActivities.map(({ activity, windowCount, quality, index }) => {
-                  const activityInfo = ACTIVITIES.find(a => a.id === activity);
-                  const Icon = activityInfo?.icon || Activity;
-                  const qualityColor = quality === 'good' ? 'text-emerald-500' : quality === 'fair' ? 'text-amber-500' : 'text-red-500';
-                  return (
-                    <div 
-                      key={index}
-                      className="flex items-center justify-between py-1 px-2 rounded bg-muted/30"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Icon 
-                          className="w-3 h-3" 
-                          style={{ color: activityInfo?.color }}
-                        />
-                        <span className="text-xs text-foreground capitalize">{activity}</span>
-                        <span className="text-xs text-muted-foreground">({windowCount} windows)</span>
-                        <span className={`text-xs ${qualityColor}`}>{quality}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteActivity(index)}
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                        data-testid={`button-delete-activity-${index}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <Button
-            onClick={handleTrainModel}
-            disabled={!canTrain}
-            className="w-full gap-2"
-            data-testid="button-train-model"
-          >
-            {isTraining ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Training MLP...
-              </>
-            ) : (
-              <>
-                <Brain className="w-4 h-4" />
-                Train Model
-                {uniqueActivitiesCount < 2 && (
-                  <span className="text-xs opacity-70">
-                    (need {2 - uniqueActivitiesCount} more activity)
-                  </span>
-                )}
-              </>
             )}
-          </Button>
-        </div>
-      )}
 
-      {/* Classification results */}
-      {isClassifying && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${!hasEnoughData ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`} />
-              <span className="text-sm font-medium text-foreground">
-                {!hasEnoughData ? 'Waiting for data...' : 'Live Classification'}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleClassification}
-              className="text-muted-foreground hover:text-destructive"
-              data-testid="button-stop-classification"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {!hasEnoughData && (
-            <div className="text-center py-4 text-muted-foreground">
-              <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
-              <p className="text-sm">Waiting for IMU data stream...</p>
-              <p className="text-xs mt-1">{pitchHistory.length}/30 samples</p>
-            </div>
-          )}
-
-          {hasEnoughData && classification && (
-            <>
-              <div className="text-center py-4">
-                {(() => {
-                  const currentActivity = ACTIVITIES.find(a => a.id === classification.currentActivity);
-                  const Icon = currentActivity?.icon || Activity;
-                  return (
-                    <div className="flex flex-col items-center gap-2">
-                      <div 
-                        className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300"
-                        style={{ 
-                          backgroundColor: `${currentActivity?.color}20`,
-                          boxShadow: `0 0 20px ${currentActivity?.color}40`
-                        }}
-                      >
-                        <Icon 
-                          className="w-8 h-8 transition-all duration-300" 
-                          style={{ color: currentActivity?.color }}
-                        />
-                      </div>
-                      <div className="text-xl font-semibold text-foreground capitalize">
-                        {classification.currentActivity}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {classification.confidence.toFixed(0)}% confidence
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div className="space-y-2">
-                {ACTIVITIES.map((activity) => {
-                  const prob = classification[activity.id];
-                  const isActive = classification.currentActivity === activity.id;
-                  const Icon = activity.icon;
-                  
-                  return (
-                    <div key={activity.id} className="flex items-center gap-3">
-                      <Icon 
-                        className="w-4 h-4 flex-shrink-0 transition-all duration-200"
-                        style={{ 
-                          color: isActive ? activity.color : 'hsl(var(--muted-foreground))',
-                          opacity: isActive ? 1 : 0.5
-                        }} 
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="h-2 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-200 ease-out"
-                            style={{ 
-                              width: `${prob}%`,
-                              backgroundColor: activity.color,
-                              opacity: isActive ? 1 : 0.4
-                            }}
+            {hasEnoughData && classification && (
+              <>
+                <div className="text-center py-4">
+                  {(() => {
+                    const currentActivity = ACTIVITIES.find(a => a.id === classification.currentActivity);
+                    const Icon = currentActivity?.icon || Activity;
+                    return (
+                      <div className="flex flex-col items-center gap-2">
+                        <div
+                          className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300"
+                          style={{
+                            backgroundColor: `${currentActivity?.color}20`,
+                            boxShadow: `0 0 20px ${currentActivity?.color}40`
+                          }}
+                        >
+                          <Icon
+                            className="w-8 h-8 transition-all duration-300"
+                            style={{ color: currentActivity?.color }}
                           />
                         </div>
+                        <div className="text-xl font-semibold text-foreground capitalize">
+                          {classification.currentActivity}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {classification.confidence.toFixed(0)}% confidence
+                        </div>
                       </div>
-                      <span 
-                        className="text-xs font-mono w-12 text-right transition-all duration-200"
-                        style={{ 
-                          color: isActive ? activity.color : 'hsl(var(--muted-foreground))',
-                          fontWeight: isActive ? 600 : 400
-                        }}
-                      >
-                        {prob.toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-2">
+                  {ACTIVITIES.map((activity) => {
+                    const prob = classification[activity.id];
+                    const isActive = classification.currentActivity === activity.id;
+                    const Icon = activity.icon;
+
+                    return (
+                      <div key={activity.id} className="flex items-center gap-3">
+                        <Icon
+                          className="w-4 h-4 flex-shrink-0 transition-all duration-200"
+                          style={{
+                            color: isActive ? activity.color : 'hsl(var(--muted-foreground))',
+                            opacity: isActive ? 1 : 0.5
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-200 ease-out"
+                              style={{
+                                width: `${prob}%`,
+                                backgroundColor: activity.color,
+                                opacity: isActive ? 1 : 0.4
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <span
+                          className="text-xs font-mono w-12 text-right transition-all duration-200"
+                          style={{
+                            color: isActive ? activity.color : 'hsl(var(--muted-foreground))',
+                            fontWeight: isActive ? 600 : 400
+                          }}
+                        >
+                          {prob.toFixed(0)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )
+      }
+    </div >
   );
 }

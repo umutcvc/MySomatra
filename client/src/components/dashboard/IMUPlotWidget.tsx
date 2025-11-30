@@ -16,16 +16,23 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
+  const lastDrawTimeRef = useRef(0);
+  const cachedRangeRef = useRef({ min: -90, max: 90, lastMin: 0, lastMax: 0 });
+  const FRAME_INTERVAL = 1000 / 60; // 60fps for smooth animation
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', {
+      alpha: false,  // No transparency = faster
+      desynchronized: true // Allow browser to optimize
+    });
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    
+
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
@@ -34,111 +41,141 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
 
     const width = rect.width;
     const height = rect.height;
-    
+
+    // Clear background
     ctx.fillStyle = 'hsl(240, 10%, 10%)';
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = 'hsl(240, 10%, 20%)';
-    ctx.lineWidth = 1;
-    
-    const gridLines = 8;
-    for (let i = 1; i < gridLines; i++) {
-      const y = (height / gridLines) * i;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-    
-    for (let i = 1; i < 10; i++) {
-      const x = (width / 10) * i;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-
-    ctx.strokeStyle = 'hsl(240, 10%, 30%)';
-    ctx.lineWidth = 2;
-    const centerY = height / 2;
-    ctx.beginPath();
-    ctx.moveTo(0, centerY);
-    ctx.lineTo(width, centerY);
-    ctx.stroke();
-
-    ctx.fillStyle = 'hsl(240, 10%, 40%)';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('+90°', 4, 14);
-    ctx.fillText('0°', 4, centerY - 4);
-    ctx.fillText('-90°', 4, height - 4);
+    // Dynamic scaling based on actual data range (with smart caching)
+    let maxPitch = 90;
+    let minPitch = -90;
 
     if (pitchHistory.length > 1) {
-      ctx.strokeStyle = 'hsl(142, 76%, 50%)';
-      ctx.lineWidth = 2;
+      const pitches = pitchHistory.map(p => p.pitch);
+      const dataMax = Math.max(...pitches);
+      const dataMin = Math.min(...pitches);
+
+      // Only recalculate if min/max actually changed (not just length)
+      if (dataMin !== cachedRangeRef.current.lastMin || dataMax !== cachedRangeRef.current.lastMax) {
+        // Add 10% padding to the range
+        const range = Math.max(10, dataMax - dataMin);
+        const padding = range * 0.1;
+        maxPitch = dataMax + padding;
+        minPitch = dataMin - padding;
+
+        // Cache the results
+        cachedRangeRef.current = { min: minPitch, max: maxPitch, lastMin: dataMin, lastMax: dataMax };
+      } else {
+        // Use cached values
+        minPitch = cachedRangeRef.current.min;
+        maxPitch = cachedRangeRef.current.max;
+      }
+    }
+
+    const pitchRange = maxPitch - minPitch;
+    const zeroY = height - ((0 - minPitch) / pitchRange * height);
+
+    // Draw zero line if in range
+    if (zeroY >= 0 && zeroY <= height) {
+      ctx.strokeStyle = 'hsl(240, 10%, 30%)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, zeroY);
+      ctx.lineTo(width, zeroY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Draw axis labels
+    ctx.fillStyle = 'hsl(240, 10%, 50%)';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${maxPitch.toFixed(0)}°`, 6, 14);
+    if (zeroY >= 14 && zeroY <= height - 6) {
+      ctx.fillText('0°', 6, zeroY - 4);
+    }
+    ctx.fillText(`${minPitch.toFixed(0)}°`, 6, height - 6);
+
+    if (pitchHistory.length > 1) {
+      // Decimate points if too many (only draw every Nth point for performance)
+      const maxPoints = 200;
+      const step = Math.max(1, Math.floor(pitchHistory.length / maxPoints));
+
+      // Orange color matching the interface (primary color)
+      ctx.strokeStyle = 'hsl(25, 85%, 58%)';
+      ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      
+
       ctx.beginPath();
-      
-      const maxPitch = 90;
-      const minPitch = -90;
-      const pitchRange = maxPitch - minPitch;
-      
-      for (let i = 0; i < pitchHistory.length; i++) {
+
+      for (let i = 0; i < pitchHistory.length; i += step) {
         const x = (i / (pitchHistory.length - 1)) * width;
         const normalizedPitch = (pitchHistory[i].pitch - minPitch) / pitchRange;
         const y = height - (normalizedPitch * height);
-        
+
         if (i === 0) {
           ctx.moveTo(x, y);
         } else {
           ctx.lineTo(x, y);
         }
       }
-      
+
+      // Ensure we always draw the last point
+      if (pitchHistory.length > maxPoints) {
+        const lastIdx = pitchHistory.length - 1;
+        const x = width;
+        const normalizedPitch = (pitchHistory[lastIdx].pitch - minPitch) / pitchRange;
+        const y = height - (normalizedPitch * height);
+        ctx.lineTo(x, y);
+      }
+
       ctx.stroke();
 
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, 'hsla(142, 76%, 50%, 0.3)');
-      gradient.addColorStop(0.5, 'hsla(142, 76%, 50%, 0.1)');
-      gradient.addColorStop(1, 'hsla(142, 76%, 50%, 0.3)');
-      
+      // Simplified gradient (less GPU work)
+      const gradient = ctx.createLinearGradient(0, height * 0.3, 0, height);
+      gradient.addColorStop(0, 'hsla(25, 85%, 58%, 0.15)');
+      gradient.addColorStop(1, 'hsla(25, 85%, 58%, 0.05)');
+
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      
-      for (let i = 0; i < pitchHistory.length; i++) {
+
+      for (let i = 0; i < pitchHistory.length; i += step) {
         const x = (i / (pitchHistory.length - 1)) * width;
         const normalizedPitch = (pitchHistory[i].pitch - minPitch) / pitchRange;
         const y = height - (normalizedPitch * height);
-        
+
         if (i === 0) {
-          ctx.moveTo(x, centerY);
+          ctx.moveTo(x, height);
           ctx.lineTo(x, y);
         } else {
           ctx.lineTo(x, y);
         }
       }
-      
-      const lastX = width;
-      ctx.lineTo(lastX, centerY);
+
+      // Close path to baseline
+      ctx.lineTo(width, height);
       ctx.closePath();
       ctx.fill();
 
+      // Current position indicator
       if (pitchHistory.length > 0) {
         const lastPitch = pitchHistory[pitchHistory.length - 1];
         const lastNormalized = (lastPitch.pitch - minPitch) / pitchRange;
         const lastY = height - (lastNormalized * height);
-        
-        ctx.fillStyle = 'hsl(142, 76%, 50%)';
+
+        // Orange dot at current position
+        ctx.fillStyle = 'hsl(25, 85%, 58%)';
         ctx.beginPath();
         ctx.arc(width - 2, lastY, 5, 0, Math.PI * 2);
         ctx.fill();
-        
-        ctx.strokeStyle = 'hsla(142, 76%, 70%, 0.5)';
-        ctx.lineWidth = 1;
+
+        // Orange glow around dot
+        ctx.strokeStyle = 'hsla(25, 85%, 68%, 0.6)';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(width - 2, lastY, 8, 0, Math.PI * 2);
+        ctx.arc(width - 2, lastY, 9, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -147,13 +184,19 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   useEffect(() => {
     let running = true;
 
-    const animate = () => {
+    const animate = (timestamp: number) => {
       if (!running) return;
-      draw();
+
+      // Throttle to 30fps for better performance
+      if (timestamp - lastDrawTimeRef.current >= FRAME_INTERVAL) {
+        draw();
+        lastDrawTimeRef.current = timestamp;
+      }
+
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       running = false;
@@ -162,7 +205,7 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
         animationRef.current = null;
       }
     };
-  }, [draw]);
+  }, [draw, FRAME_INTERVAL]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -182,7 +225,7 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
   const handleCalibrate = async () => {
     setIsCalibrating(true);
     setCountdown(3);
-    
+
     // Start countdown
     const countdownInterval = setInterval(() => {
       setCountdown(prev => {
@@ -193,10 +236,10 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
         return prev - 1;
       });
     }, 1000);
-    
+
     // Send calibration command
     await calibrateIMU(3000);
-    
+
     // Clean up after calibration
     setTimeout(() => {
       setIsCalibrating(false);
@@ -225,12 +268,12 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
       </CardHeader>
       <CardContent className="flex-1 flex flex-col overflow-hidden">
         <div ref={containerRef} className="relative rounded-lg overflow-hidden border border-border flex-1 min-h-0">
-          <canvas 
+          <canvas
             ref={canvasRef}
             className="w-full h-full"
             data-testid="canvas-pitch-plot"
           />
-          
+
           {!isConnected && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
               <div className="text-center">
@@ -245,8 +288,8 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
           <div className="text-xs text-muted-foreground">
             {pitchHistory.length} samples
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={handleCalibrate}
             disabled={!isConnected || isCalibrating}
@@ -262,7 +305,7 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
           <div className="p-2 rounded-lg bg-muted/30">
             <div className="text-xs text-muted-foreground">Min</div>
             <div className="text-sm font-medium font-mono text-foreground">
-              {pitchHistory.length > 0 
+              {pitchHistory.length > 0
                 ? Math.min(...pitchHistory.map(p => p.pitch)).toFixed(1) + '°'
                 : '--'}
             </div>
@@ -276,7 +319,7 @@ export default function IMUPlotWidget({ className }: IMUPlotWidgetProps) {
           <div className="p-2 rounded-lg bg-muted/30">
             <div className="text-xs text-muted-foreground">Max</div>
             <div className="text-sm font-medium font-mono text-foreground">
-              {pitchHistory.length > 0 
+              {pitchHistory.length > 0
                 ? Math.max(...pitchHistory.map(p => p.pitch)).toFixed(1) + '°'
                 : '--'}
             </div>

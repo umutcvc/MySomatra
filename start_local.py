@@ -10,21 +10,34 @@ import subprocess
 import time
 import webbrowser
 
-# Your database connection (from Neon)
-DATABASE_URL = "postgresql://neondb_owner:npg_oW9trhQIJ5Zx@ep-super-flower-ahzhdzk8-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
-SESSION_SECRET = "mysomatra_secret_key_2024"
-
 def main():
     print("=" * 50)
     print("  MySomatra Local Development Starter")
     print("=" * 50)
     print()
 
-    # Set environment variables
-    os.environ["DATABASE_URL"] = DATABASE_URL
-    os.environ["SESSION_SECRET"] = SESSION_SECRET
-    os.environ["NODE_ENV"] = "development"
+    # Load environment variables from .env file
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if os.path.exists(env_path):
+        print("[0/4] Loading environment from .env...")
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    # Remove quotes if present
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    os.environ[key] = value
     
+    # Check for required environment variables
+    if "DATABASE_URL" not in os.environ:
+        print("WARNING: DATABASE_URL not found in environment or .env file!")
+        print("Please create a .env file with DATABASE_URL and SESSION_SECRET")
+        return
+
     print("[1/4] Environment variables set")
     
     # Get the directory where this script is located
